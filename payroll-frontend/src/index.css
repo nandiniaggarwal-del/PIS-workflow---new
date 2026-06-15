@@ -1,0 +1,18 @@
+@import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+body {
+  margin: 0;
+  font-family: 'Figtree', sans-serif;
+  background-color: #F8F4EC;
+  color: #1E1E1E;
+  overflow: hidden;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button {
+  transition: all 0.2s ease;
+}
