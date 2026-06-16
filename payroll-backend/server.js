@@ -56,6 +56,16 @@ app.get(
 
   }
 );
-app.listen(5000, () => {
-  console.log("Server running on port 5000");
+
+// Global error-handling middleware
+app.use((err, req, res, next) => {
+  console.error("Global error handler:", err);
+  res.status(err.status || 500).json({
+    message: err.message || "Internal Server Error"
+  });
+});
+
+const PORT = process.env.PORT || 5001;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });

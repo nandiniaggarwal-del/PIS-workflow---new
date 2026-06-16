@@ -51,6 +51,9 @@ export default function VerifyOTPScreen() {
         if(role === "payroll")
           navigate("/payroll");
 
+        if(role === "admin")
+          navigate("/admin");
+
       } catch {
 
         alert(

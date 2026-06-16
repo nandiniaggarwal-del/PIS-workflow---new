@@ -1,5 +1,6 @@
 const express = require("express");
 const multer = require("multer");
+const { authenticate } = require("../middleware/auth");
 
 const {
   getPayrollData,
@@ -12,10 +13,11 @@ const upload = multer({
   dest: "uploads/",
 });
 
-router.get("/", getPayrollData);
+router.get("/", authenticate, getPayrollData);
 
 router.post(
   "/upload",
+  authenticate,
   upload.single("file"),
   uploadPayrollFile
 );

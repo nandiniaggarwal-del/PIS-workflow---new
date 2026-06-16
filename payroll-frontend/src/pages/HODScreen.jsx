@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import API from "../services/api";
 
 import {
@@ -58,9 +59,37 @@ export default function HODScreen() {
   const [comments, setComments] =
     useState("");
 
+  const navigate = useNavigate();
+  const [history, setHistory] = useState([]);
+
   useEffect(() => {
+    const storedUser = JSON.parse(localStorage.getItem("user"));
+    if (!storedUser || storedUser.role.toLowerCase() !== "hod") {
+      alert("Access Denied: HOD role required.");
+      if (storedUser) {
+        const r = storedUser.role.toLowerCase();
+        if (r === "admin") navigate("/admin");
+        else if (r === "maker") navigate("/maker");
+        else if (r === "hrbp") navigate("/hrbp");
+        else if (r === "payroll") navigate("/payroll");
+        else navigate("/");
+      } else {
+        navigate("/");
+      }
+      return;
+    }
     fetchPayrollData();
+    fetchWorkflowHistory();
   }, []);
+
+  const fetchWorkflowHistory = async () => {
+    try {
+      const response = await API.get("/workflow/history");
+      setHistory(response.data);
+    } catch (error) {
+      console.log("Failed to fetch history:", error);
+    }
+  };
 
   const fetchPayrollData = async () => {
     try {
@@ -493,33 +522,33 @@ export default function HODScreen() {
     Workflow History
   </h3>
 
-  {rows[0]?.history?.length ? (
+  {history?.length ? (
+    <div className="max-h-[150px] overflow-y-auto pr-2">
+      {history.map(
+        (item, index) => (
 
-    rows[0].history.map(
-      (item, index) => (
+          <div
+            key={index}
+            className="border-b border-[#EFEAE2] py-2 last:border-none"
+          >
 
-        <div
-          key={index}
-          className="border-b border-[#EFEAE2] py-2"
-        >
+            <p className="text-[12px] font-medium">
+              {item.action}
+            </p>
 
-          <p className="text-[12px] font-medium">
-            {item.action}
-          </p>
+            <p className="text-[11px] text-[#777]">
+              {item.user}
+            </p>
 
-          <p className="text-[11px] text-[#777]">
-            {item.user}
-          </p>
+            <p className="text-[10px] text-[#999]">
+              {item.timestamp}
+            </p>
 
-          <p className="text-[10px] text-[#999]">
-            {item.timestamp}
-          </p>
+          </div>
 
-        </div>
-
-      )
-    )
-
+        )
+      )}
+    </div>
   ) : (
 
     <p className="text-[12px] text-[#777]">
@@ -614,14 +643,8 @@ export default function HODScreen() {
         <input
           value={row.remarks || ""}
           onChange={(e) => {
-
-            const updated = [...rows];
-
-            updated[index].remarks =
-              e.target.value;
-
+            const updated = rows.map(r => r.id === row.id ? { ...r, remarks: e.target.value } : r);
             setRows(updated);
-
           }}
           className="
             w-full
@@ -670,6 +693,7 @@ export default function HODScreen() {
       );
 
       fetchPayrollData();
+      fetchWorkflowHistory();
 
     } catch (error) {
 
@@ -693,6 +717,7 @@ export default function HODScreen() {
                         alert(response.data.message);
 
                         fetchPayrollData();
+                        fetchWorkflowHistory();
                     } catch (error) {
                         console.log(error);
                     }

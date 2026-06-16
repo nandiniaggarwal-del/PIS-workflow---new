@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import API from "../services/api";
 
 import {
@@ -49,7 +50,24 @@ export default function PayrollScreen() {
   const [activeModule, setActiveModule] =
     useState("Overtime");
 
+  const navigate = useNavigate();
+
   useEffect(() => {
+    const storedUser = JSON.parse(localStorage.getItem("user"));
+    if (!storedUser || storedUser.role.toLowerCase() !== "payroll") {
+      alert("Access Denied: Payroll role required.");
+      if (storedUser) {
+        const r = storedUser.role.toLowerCase();
+        if (r === "admin") navigate("/admin");
+        else if (r === "maker") navigate("/maker");
+        else if (r === "hrbp") navigate("/hrbp");
+        else if (r === "hod") navigate("/hod");
+        else navigate("/");
+      } else {
+        navigate("/");
+      }
+      return;
+    }
     fetchPayrollData();
   }, []);
 
@@ -141,7 +159,7 @@ export default function PayrollScreen() {
         activeModule === "Overtime"
           ? row.overtimeHours
           : activeModule === "Holiday Payout"
-          ? row.payoutDate
+          ? row.holidayDate
           : row.amount,
 
         row.remarks,

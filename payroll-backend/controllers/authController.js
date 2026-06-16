@@ -4,6 +4,8 @@ const users =
 const otpStore =
   require("../data/otpStore");
 
+const { generateToken } = require("../middleware/auth");
+
 const {
   sendEmail,
 } = require("../services/emailService");
@@ -39,12 +41,17 @@ exports.sendOTP =
       ).toString();
 
     otpStore[email] = otp;
+    console.log(`[DEVELOPER MODE] OTP generated for ${email}: ${otp}`);
 
-    await sendEmail(
-      email,
-      "Payroll Login OTP",
-      `Your OTP is ${otp}`
-    );
+    try {
+      await sendEmail(
+        email,
+        "Payroll Login OTP",
+        `Your OTP is ${otp}`
+      );
+    } catch (error) {
+      console.error("Failed to send OTP email:", error);
+    }
 
     res.json({
       message:
@@ -80,8 +87,10 @@ exports.verifyOTP =
   const user =
     users.find(
       u =>
-      u.email === email
+      u.email.toLowerCase() === email.toLowerCase()
     );
+
+  const token = generateToken({ email: user.email, role: user.role });
 
   res.json({
 
@@ -89,7 +98,9 @@ exports.verifyOTP =
 
     email:user.email,
 
-    role:user.role
+    role:user.role,
+
+    token:token
 
   });
 

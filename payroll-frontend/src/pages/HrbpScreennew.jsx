@@ -1,4 +1,6 @@
+// HRBP Screen Dashboard Component
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import API from "../services/api";
 
 import {
@@ -60,9 +62,37 @@ export default function HRBPScreen() {
   const [flaggedColumns, setFlaggedColumns] =
     useState([]);
 
+  const navigate = useNavigate();
+  const [history, setHistory] = useState([]);
+
   useEffect(() => {
+    const storedUser = JSON.parse(localStorage.getItem("user"));
+    if (!storedUser || storedUser.role.toLowerCase() !== "hrbp") {
+      alert("Access Denied: HRBP role required.");
+      if (storedUser) {
+        const r = storedUser.role.toLowerCase();
+        if (r === "admin") navigate("/admin");
+        else if (r === "maker") navigate("/maker");
+        else if (r === "hod") navigate("/hod");
+        else if (r === "payroll") navigate("/payroll");
+        else navigate("/");
+      } else {
+        navigate("/");
+      }
+      return;
+    }
     fetchPayrollData();
+    fetchWorkflowHistory();
   }, []);
+
+  const fetchWorkflowHistory = async () => {
+    try {
+      const response = await API.get("/workflow/history");
+      setHistory(response.data);
+    } catch (error) {
+      console.log("Failed to fetch history:", error);
+    }
+  };
 
   const fetchPayrollData = async () => {
     try {
@@ -215,41 +245,41 @@ export default function HRBPScreen() {
     Remarks History
   </h3>
 
-  {rows[0]?.history?.length ? (
+  {history?.length ? (
+    <div className="max-h-[150px] overflow-y-auto pr-2">
+      {history.map(
+        (item,index) => (
 
-    rows[0].history.map(
-      (item,index) => (
+          <div
+            key={index}
+            className="border-b border-[#EFEAE2] py-3 last:border-none"
+          >
 
-        <div
-          key={index}
-          className="border-b border-[#EFEAE2] py-3"
-        >
-
-          <p className="text-[12px] font-medium">
-            {item.action}
-          </p>
-
-          <p className="text-[11px] text-[#666]">
-            {item.user}
-          </p>
-
-          {item.remarks && (
-
-            <p className="text-[12px] text-[#F26B5B] mt-1">
-              {item.remarks}
+            <p className="text-[12px] font-medium">
+              {item.action}
             </p>
 
-          )}
+            <p className="text-[11px] text-[#666]">
+              {item.user}
+            </p>
 
-          <p className="text-[10px] text-[#999]">
-            {item.timestamp}
-          </p>
+            {item.remarks && (
 
-        </div>
+              <p className="text-[12px] text-[#F26B5B] mt-1">
+                {item.remarks}
+              </p>
 
-      )
-    )
+            )}
 
+            <p className="text-[10px] text-[#999]">
+              {item.timestamp}
+            </p>
+
+          </div>
+
+        )
+      )}
+    </div>
   ) : (
 
     <p className="text-[12px] text-[#777]">
@@ -489,14 +519,8 @@ onChange={(e) =>
         <input
           value={row.remarks || ""}
           onChange={(e) => {
-
-            const updated = [...rows];
-
-            updated[index].remarks =
-              e.target.value;
-
+            const updated = rows.map(r => r.id === row.id ? { ...r, remarks: e.target.value } : r);
             setRows(updated);
-
           }}
           className="
             w-full
@@ -523,12 +547,13 @@ onChange={(e) =>
   onClick={async () => {
 
     try {
-        await API.post(
-  "/workflow/save-hrbp-review",
-  {
-    comments
-  }
-);
+      await API.post(
+        "/workflow/save-hrbp-review",
+        {
+          comments: hrbpComments,
+          flaggedColumns,
+        }
+      );
 
       const response =
         await API.get(
@@ -540,6 +565,7 @@ onChange={(e) =>
       );
 
       fetchPayrollData();
+      fetchWorkflowHistory();
 
     } catch (error) {
 
@@ -572,6 +598,7 @@ onChange={(e) =>
                     );
 
                     fetchPayrollData();
+                    fetchWorkflowHistory();
                   } catch (error) {
                     console.log(error);
                   }

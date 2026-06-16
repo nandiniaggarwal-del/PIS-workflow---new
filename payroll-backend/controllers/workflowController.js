@@ -61,21 +61,32 @@ exports.submitToHRBP = async (req, res) => {
   );
 
   workflowData.makerQueue = [];
+
+  const activeModule = workflowData.hrbpQueue[workflowData.hrbpQueue.length - 1]?.module || "Payroll";
+  workflowData.workflowHistory.push({
+    action: `Submitted Sheet (${activeModule})`,
+    user: "Maker User",
+    remarks: "Pending HRBP review",
+    timestamp: new Date().toLocaleString()
+  });
+
   const hrbp =
   getUserByRole("hrbp");
 
 if (hrbp) {
+  try {
+    await sendEmail(
 
-  await sendEmail(
+      hrbp.email,
 
-    hrbp.email,
+      "Payroll Sheet Awaiting Review",
 
-    "Payroll Sheet Awaiting Review",
+      "A payroll sheet has been submitted by Business SPOC and is awaiting your review."
 
-    "A payroll sheet has been submitted by Business SPOC and is awaiting your review."
-
-  );
-
+    );
+  } catch (err) {
+    console.error("Failed to send email to HRBP:", err);
+  }
 }
 
   res.json({
@@ -112,21 +123,32 @@ exports.submitToHOD = async (req, res) => {
   );
 
   workflowData.hrbpQueue = [];
+
+  const activeModule = workflowData.hodQueue[workflowData.hodQueue.length - 1]?.module || "Payroll";
+  workflowData.workflowHistory.push({
+    action: `Approved Sheet (${activeModule})`,
+    user: "HRBP User",
+    remarks: "Pending HOD approval",
+    timestamp: new Date().toLocaleString()
+  });
+
   const hod =
   getUserByRole("hod");
 
 if (hod) {
+  try {
+    await sendEmail(
 
-  await sendEmail(
+      hod.email,
 
-    hod.email,
+      "Payroll Sheet Awaiting Approval",
 
-    "Payroll Sheet Awaiting Approval",
+      "A payroll sheet is awaiting your approval."
 
-    "A payroll sheet is awaiting your approval."
-
-  );
-
+    );
+  } catch (err) {
+    console.error("Failed to send email to HOD:", err);
+  }
 }
 
   res.json({
@@ -163,21 +185,32 @@ exports.submitToPayroll = async (req, res) => {
   );
 
   workflowData.hodQueue = [];
+
+  const activeModule = workflowData.payrollQueue[workflowData.payrollQueue.length - 1]?.module || "Payroll";
+  workflowData.workflowHistory.push({
+    action: `Approved & Sent to Payroll (${activeModule})`,
+    user: "HOD User",
+    remarks: "Ready for processing",
+    timestamp: new Date().toLocaleString()
+  });
+
   const payroll =
   getUserByRole("payroll");
 
 if (payroll) {
+  try {
+    await sendEmail(
 
-  await sendEmail(
+      payroll.email,
 
-    payroll.email,
+      "Payroll Sheet Ready",
 
-    "Payroll Sheet Ready",
+      "A payroll sheet has been approved and is ready for payroll processing."
 
-    "A payroll sheet has been approved and is ready for payroll processing."
-
-  );
-
+    );
+  } catch (err) {
+    console.error("Failed to send email to Payroll:", err);
+  }
 }
 
   res.json({
@@ -279,24 +312,34 @@ console.log(
 
   workflowData.hrbpQueue = [];
 
+  const activeModule = updatedItems[0]?.module || "Payroll";
+  workflowData.workflowHistory.push({
+    action: `Returned Sheet to Maker (${activeModule})`,
+    user: "HRBP User",
+    remarks: comments,
+    timestamp: new Date().toLocaleString()
+  });
+
   const maker =
     getUserByRole("maker");
 
   if (maker) {
+    try {
+      await sendEmail(
 
-    await sendEmail(
+        maker.email,
 
-      maker.email,
+        "Payroll Sheet Rejected",
 
-      "Payroll Sheet Rejected",
-
-      `The payroll sheet has been returned by HRBP.
+        `The payroll sheet has been returned by HRBP.
 
 Comments:
 ${comments}`
 
-    );
-
+      );
+    } catch (err) {
+      console.error("Failed to send rejection email to Maker:", err);
+    }
   }
 
   res.json({
@@ -345,24 +388,34 @@ exports.returnToHRBP = async (
 
   workflowData.hodQueue = [];
 
+  const activeModule = updatedItems[0]?.module || "Payroll";
+  workflowData.workflowHistory.push({
+    action: `Returned Sheet to HRBP (${activeModule})`,
+    user: "HOD User",
+    remarks: comments,
+    timestamp: new Date().toLocaleString()
+  });
+
   const hrbp =
     getUserByRole("hrbp");
 
   if (hrbp) {
+    try {
+      await sendEmail(
 
-    await sendEmail(
+        hrbp.email,
 
-      hrbp.email,
+        "Payroll Sheet Returned",
 
-      "Payroll Sheet Returned",
-
-      `The payroll sheet has been returned by HOD.
+        `The payroll sheet has been returned by HOD.
 
 Comments:
 ${comments}`
 
-    );
-
+      );
+    } catch (err) {
+      console.error("Failed to send return email to HRBP:", err);
+    }
   }
 
   res.json({
@@ -394,4 +447,8 @@ exports.saveHODReview =
       "HOD Review Saved"
   });
 
+};
+
+exports.getWorkflowHistory = (req, res) => {
+  res.json(workflowData.workflowHistory || []);
 };

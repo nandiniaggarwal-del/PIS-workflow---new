@@ -6,6 +6,8 @@ module.exports = {
 
   hodQueue: [],
 
-  payrollQueue: []
+  payrollQueue: [],
+
+  workflowHistory: []
 
 };

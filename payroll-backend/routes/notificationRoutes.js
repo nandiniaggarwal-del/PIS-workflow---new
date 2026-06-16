@@ -1,4 +1,5 @@
 const express = require("express");
+const { authenticate } = require("../middleware/auth");
 
 const {
   getNotifications,
@@ -6,6 +7,6 @@ const {
 
 const router = express.Router();
 
-router.get("/", getNotifications);
+router.get("/", authenticate, getNotifications);
 
 module.exports = router;

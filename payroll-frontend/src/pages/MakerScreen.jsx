@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import API from "../services/api";
 import * as XLSX from "xlsx";
 import {
@@ -9,6 +10,8 @@ import {
   Bell,
   Upload,
   Download,
+  Plus,
+  Trash2,
 } from "lucide-react";
 
 const timeline = [
@@ -61,9 +64,37 @@ const MakerScreen = () => {
   const [activeModule, setActiveModule] =
     useState("Overtime");
 
+  const navigate = useNavigate();
+  const [history, setHistory] = useState([]);
+
   useEffect(() => {
+    const storedUser = JSON.parse(localStorage.getItem("user"));
+    if (!storedUser || storedUser.role.toLowerCase() !== "maker") {
+      alert("Access Denied: Maker role required.");
+      if (storedUser) {
+        const r = storedUser.role.toLowerCase();
+        if (r === "admin") navigate("/admin");
+        else if (r === "hrbp") navigate("/hrbp");
+        else if (r === "hod") navigate("/hod");
+        else if (r === "payroll") navigate("/payroll");
+        else navigate("/");
+      } else {
+        navigate("/");
+      }
+      return;
+    }
     fetchPayrollData();
+    fetchWorkflowHistory();
   }, []);
+
+  const fetchWorkflowHistory = async () => {
+    try {
+      const response = await API.get("/workflow/history");
+      setHistory(response.data);
+    } catch (error) {
+      console.log("Failed to fetch history:", error);
+    }
+  };
 
   const fetchPayrollData = async () => {
     try {
@@ -86,12 +117,33 @@ const MakerScreen = () => {
     }
   };
 
-  const handleChange = (index, field, value) => {
-    const updated = [...rows];
-
-    updated[index][field] = value;
-
+  const handleChange = (rowId, field, value) => {
+    const updated = rows.map(r => r.id === rowId ? { ...r, [field]: value } : r);
     setRows(updated);
+  };
+
+  const addRow = () => {
+    const newRow = {
+      id: Date.now(),
+      sno: rows.length + 1,
+      empCode: "",
+      empName: "",
+      grade: "",
+      designation: "",
+      employeeHome: "",
+      type: activeModule,
+      module: activeModule,
+      amount: "",
+      overtimeHours: "",
+      holidayDate: "",
+      remarks: "",
+      history: []
+    };
+    setRows([...rows, newRow]);
+  };
+
+  const deleteRow = (rowId) => {
+    setRows(rows.filter(r => r.id !== rowId));
   };
 const downloadTemplate = () => {
 
@@ -462,41 +514,41 @@ const filteredRows =
     Remarks History
   </h3>
 
-  {rows[0]?.history?.length ? (
+  {history?.length ? (
+    <div className="max-h-[150px] overflow-y-auto pr-2">
+      {history.map(
+        (item,index) => (
 
-    rows[0].history.map(
-      (item,index) => (
+          <div
+            key={index}
+            className="border-b border-[#EFEAE2] py-3 last:border-none"
+          >
 
-        <div
-          key={index}
-          className="border-b border-[#EFEAE2] py-3"
-        >
-
-          <p className="text-[12px] font-medium">
-            {item.action}
-          </p>
-
-          <p className="text-[11px] text-[#666]">
-            {item.user}
-          </p>
-
-          {item.remarks && (
-
-            <p className="text-[12px] text-[#F26B5B] mt-1">
-              {item.remarks}
+            <p className="text-[12px] font-medium">
+              {item.action}
             </p>
 
-          )}
+            <p className="text-[11px] text-[#666]">
+              {item.user}
+            </p>
 
-          <p className="text-[10px] text-[#999]">
-            {item.timestamp}
-          </p>
+            {item.remarks && (
 
-        </div>
+              <p className="text-[12px] text-[#F26B5B] mt-1">
+                {item.remarks}
+              </p>
 
-      )
-    )
+            )}
 
+            <p className="text-[10px] text-[#999]">
+              {item.timestamp}
+            </p>
+
+          </div>
+
+        )
+      )}
+    </div>
   ) : (
 
     <p className="text-[12px] text-[#777]">
@@ -640,6 +692,27 @@ const filteredRows =
             </div>
 
             <div className="flex gap-3">
+
+              {/* ADD ROW */}
+
+              <button
+                onClick={addRow}
+                className="
+                  h-[36px]
+                  px-4
+                  bg-[#F3E8D7]
+                  text-black
+                  rounded-xl
+                  flex
+                  items-center
+                  gap-2
+                  text-[12px]
+                  font-medium
+                "
+              >
+                <Plus size={14} />
+                Add Row
+              </button>
 
               {/* DOWNLOAD */}
 
@@ -820,6 +893,10 @@ const filteredRows =
                       Remarks
                     </th>
 
+                    <th className="p-3 text-center">
+                      Actions
+                    </th>
+
                   </tr>
                 </thead>
 
@@ -834,45 +911,135 @@ const filteredRows =
 
                       {/* S NO */}
 
-                      <td className="p-3 text-[12px]">
+                      <td className="p-3 text-[12px] text-center">
                         {index + 1}
                       </td>
 
                       {/* ECODE */}
 
-                      <td className="p-3 text-[12px]">
-                        {row.empCode}
+                      <td className="p-3">
+                        <input
+                          value={row.empCode || ""}
+                          onChange={(e) =>
+                            handleChange(
+                              row.id,
+                              "empCode",
+                              e.target.value
+                            )
+                          }
+                          placeholder="Ecode"
+                          className="
+                            w-full
+                            border
+                            border-[#E7E3DC]
+                            rounded-lg
+                            p-2
+                            text-[12px]
+                          "
+                        />
                       </td>
 
                       {/* NAME */}
 
-                      <td className="p-3 text-[12px]">
-                        {row.empName}
+                      <td className="p-3">
+                        <input
+                          value={row.empName || ""}
+                          onChange={(e) =>
+                            handleChange(
+                              row.id,
+                              "empName",
+                              e.target.value
+                            )
+                          }
+                          placeholder="Name"
+                          className="
+                            w-full
+                            border
+                            border-[#E7E3DC]
+                            rounded-lg
+                            p-2
+                            text-[12px]
+                          "
+                        />
                       </td>
 
                       {/* GRADE */}
 
-                      <td className="p-3 text-[12px]">
-                        {row.grade}
+                      <td className="p-3">
+                        <input
+                          value={row.grade || ""}
+                          onChange={(e) =>
+                            handleChange(
+                              row.id,
+                              "grade",
+                              e.target.value
+                            )
+                          }
+                          placeholder="Grade"
+                          className="
+                            w-full
+                            border
+                            border-[#E7E3DC]
+                            rounded-lg
+                            p-2
+                            text-[12px]
+                          "
+                        />
                       </td>
 
                       {/* DESIGNATION */}
 
-                      <td className="p-3 text-[12px]">
-                        {row.designation}
+                      <td className="p-3">
+                        <input
+                          value={row.designation || ""}
+                          onChange={(e) =>
+                            handleChange(
+                              row.id,
+                              "designation",
+                              e.target.value
+                            )
+                          }
+                          placeholder="Designation"
+                          className="
+                            w-full
+                            border
+                            border-[#E7E3DC]
+                            rounded-lg
+                            p-2
+                            text-[12px]
+                          "
+                        />
                       </td>
 
                       {/* EMPLOYEE HOME */}
 
-                      <td className="p-3 text-[12px]">
-                        {row.employeeHome}
+                      <td className="p-3">
+                        <input
+                          value={row.employeeHome || ""}
+                          onChange={(e) =>
+                            handleChange(
+                              row.id,
+                              "employeeHome",
+                              e.target.value
+                            )
+                          }
+                          placeholder="Home"
+                          className="
+                            w-full
+                            border
+                            border-[#E7E3DC]
+                            rounded-lg
+                            p-2
+                            text-[12px]
+                          "
+                        />
                       </td>
 
                       {/* INPUT TYPE */}
 
                       <td className="p-3 text-[12px]">
-  {row.type}
-</td>
+                        {row.type}
+                      </td>
 
                       {/* DYNAMIC COLUMN */}
 
@@ -882,22 +1049,22 @@ const filteredRows =
 
                           <input
                             type="date"
-                            value={row.payoutDate || ""}
+                            value={row.holidayDate || ""}
                             onChange={(e) =>
                               handleChange(
-                                index,
-                                "payoutDate",
+                                row.id,
+                                "holidayDate",
                                 e.target.value
                               )
                             }
                             className="
-              w-full
-              border
-              border-[#E7E3DC]
-              rounded-lg
-              p-2
-              text-[12px]
-            "
+                              w-full
+                              border
+                              border-[#E7E3DC]
+                              rounded-lg
+                              p-2
+                              text-[12px]
+                            "
                           />
 
                         ) : (
@@ -910,21 +1077,22 @@ const filteredRows =
                             }
                             onChange={(e) =>
                               handleChange(
-                                index,
+                                row.id,
                                 row.type === "Overtime"
                                   ? "overtimeHours"
                                   : "amount",
                                 e.target.value
                               )
                             }
+                            placeholder={row.type === "Overtime" ? "Hours" : "Amount"}
                             className="
-              w-full
-              border
-              border-[#E7E3DC]
-              rounded-lg
-              p-2
-              text-[12px]
-            "
+                              w-full
+                              border
+                              border-[#E7E3DC]
+                              rounded-lg
+                              p-2
+                              text-[12px]
+                            "
                           />
 
                         )}
@@ -939,24 +1107,35 @@ const filteredRows =
                           value={row.remarks || ""}
                           onChange={(e) =>
                             handleChange(
-                              index,
+                              row.id,
                               "remarks",
                               e.target.value
                             )
                           }
+                          placeholder="Remarks"
                           className="
-            w-full
-            border
-            border-[#E7E3DC]
-            rounded-lg
-            p-2
-            text-[12px]
-          "
+                            w-full
+                            border
+                            border-[#E7E3DC]
+                            rounded-lg
+                            p-2
+                            text-[12px]
+                          "
                         />
 
                       </td>
 
-                    
+                      {/* ACTIONS */}
+
+                      <td className="p-3 text-center">
+                        <button
+                          onClick={() => deleteRow(row.id)}
+                          className="text-[#F26B5B] hover:text-[#d35a4d] transition-colors p-1"
+                          title="Delete Row"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </td>
 
                     </tr>
 
@@ -985,6 +1164,7 @@ const response =
                     alert(response.data.message);
 
                     fetchPayrollData();
+                    fetchWorkflowHistory();
 
                   } catch (error) {
                     console.log(error);

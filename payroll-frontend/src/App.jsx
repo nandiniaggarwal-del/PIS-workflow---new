@@ -4,9 +4,10 @@ import LoginScreen from "./pages/LoginScreen";
 import VerifyOTPScreen
 from "./pages/VerifyOTPScreen";
 import MakerScreen from "./pages/MakerScreen";
-import HRBPScreen from "./pages/HRBPScreennew";
+import HRBPScreen from "./pages/HrbpScreennew";
 import HODScreen from "./pages/HODScreen";
 import PayrollScreen from "./pages/PayrollScreen";
+import AdminScreen from "./pages/AdminScreen";
 
 function App() {
   return (
@@ -20,6 +21,7 @@ function App() {
 <Route path="/hrbp" element={<HRBPScreen />} />
 <Route path="/hod" element={<HODScreen />} />
 <Route path="/payroll" element={<PayrollScreen />} />
+<Route path="/admin" element={<AdminScreen />} />
 
       </Routes>
 

@@ -1,78 +1,95 @@
 const express = require("express");
-const { sendEmail } =
-require("../services/emailService");
+const { authenticate, authorize } = require("../middleware/auth");
 const router = express.Router();
 
 const workflowController =
   require("../controllers/workflowController");
 
+// Maker Routes
 router.get(
   "/maker",
+  authenticate,
+  authorize(["maker"]),
   workflowController.getMakerData
 );
-router.get("/test-email", async (req,res)=>{
-
-  await sendEmail(
-    "nandini.aggarwal@1mg.com",
-    "Test Email",
-    "Email system working"
-  );
-
-  res.send("Email sent");
-
-});
-
-router.get(
-  "/hrbp",
-  workflowController.getHRBPData
-);
-
-router.get(
-  "/hod",
-  workflowController.getHODData
-);
-
-router.get(
-  "/payroll",
-  workflowController.getPayrollData
-);
-
 router.post(
   "/save-maker",
+  authenticate,
+  authorize(["maker"]),
   workflowController.updateMakerData
-);
-
-router.post(
-  "/save-hrbp-review",
-  workflowController.saveHRBPReview
-);
-router.post(
-  "/save-hod-review",
-  workflowController.saveHODReview
 );
 router.get(
   "/submit-hrbp",
+  authenticate,
+  authorize(["maker"]),
   workflowController.submitToHRBP
 );
 
+// HRBP Routes
+router.get(
+  "/hrbp",
+  authenticate,
+  authorize(["hrbp"]),
+  workflowController.getHRBPData
+);
+router.post(
+  "/save-hrbp-review",
+  authenticate,
+  authorize(["hrbp"]),
+  workflowController.saveHRBPReview
+);
 router.get(
   "/submit-hod",
+  authenticate,
+  authorize(["hrbp"]),
   workflowController.submitToHOD
 );
-
-router.get(
-  "/submit-payroll",
-  workflowController.submitToPayroll
-);
-
 router.get(
   "/return-maker",
+  authenticate,
+  authorize(["hrbp"]),
   workflowController.returnToMaker
 );
 
+// HOD Routes
+router.get(
+  "/hod",
+  authenticate,
+  authorize(["hod"]),
+  workflowController.getHODData
+);
+router.post(
+  "/save-hod-review",
+  authenticate,
+  authorize(["hod"]),
+  workflowController.saveHODReview
+);
+router.get(
+  "/submit-payroll",
+  authenticate,
+  authorize(["hod"]),
+  workflowController.submitToPayroll
+);
 router.get(
   "/return-hrbp",
+  authenticate,
+  authorize(["hod"]),
   workflowController.returnToHRBP
+);
+
+// Payroll Routes
+router.get(
+  "/payroll",
+  authenticate,
+  authorize(["payroll"]),
+  workflowController.getPayrollData
+);
+
+// Global History Route
+router.get(
+  "/history",
+  authenticate,
+  workflowController.getWorkflowHistory
 );
 
 module.exports = router;
