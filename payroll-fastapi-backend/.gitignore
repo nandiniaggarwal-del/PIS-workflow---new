@@ -1,0 +1,22 @@
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv/
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Environment configurations (must not be committed to Git for security)
+.env
+.env.*
+
+# Local Database files and scratch output
+data/payroll.db
+data/otpStore.json
+uploads/
+*.log

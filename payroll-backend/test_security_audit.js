@@ -40,17 +40,17 @@ async function testSecurity() {
   // 3. Log in as Admin and get Token
   let adminToken = "";
   try {
-    console.log("\n3. Requesting OTP for Admin (tanushri.buddhadeo@1mg.com)...");
-    await axios.post(`${BASE_URL}/auth/send-otp`, { email: "tanushri.buddhadeo@1mg.com" });
+    console.log("\n3. Requesting OTP for Admin (amit.khatri@1mg.com)...");
+    await axios.post(`${BASE_URL}/auth/send-otp`, { email: "amit.khatri@1mg.com" });
     
     // Retrieve OTP from local otpStore directly
-    const otp = otpStore["tanushri.buddhadeo@1mg.com"];
+    const otp = otpStore["amit.khatri@1mg.com"];
     if (!otp) throw new Error("OTP not generated in otpStore");
     console.log(`   Found OTP in database: ${otp}`);
 
     console.log("   Verifying OTP to obtain token...");
     const res = await axios.post(`${BASE_URL}/auth/verify-otp`, {
-      email: "tanushri.buddhadeo@1mg.com",
+      email: "amit.khatri@1mg.com",
       otp: otp
     });
     adminToken = res.data.token;

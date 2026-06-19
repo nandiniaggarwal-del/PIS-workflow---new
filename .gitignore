@@ -43,3 +43,12 @@ coverage/
 
 # Local DB / State
 payroll-backend/data/otpStore.json
+
+# Python / Virtual Environment
+**/venv/
+**/__pycache__/
+**/*.pyc
+**/data/payroll.db
+**/data/otpStore.json
+**/uploads/
+
