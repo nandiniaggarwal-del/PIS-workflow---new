@@ -146,126 +146,12 @@ const MakerScreen = () => {
     setRows(rows.filter(r => r.id !== rowId));
   };
 const downloadTemplate = () => {
-
-  let templateData = [];
-
-  switch (activeModule) {
-
-    case "Overtime":
-      templateData = [
-        {
-          sno: "",
-          ecode: "",
-          name: "",
-          grade: "",
-          designation: "",
-          employeeHome: "",
-          inputType: "Overtime",
-          overtimeHours: "",
-          remarks: "",
-        },
-      ];
-      break;
-
-    case "Incentive":
-      templateData = [
-        {
-          sno: "",
-          ecode: "",
-          name: "",
-          grade: "",
-          designation: "",
-          employeeHome: "",
-          inputType: "Incentive",
-          amount: "",
-          remarks: "",
-        },
-      ];
-      break;
-
-    case "Holiday Payout":
-      templateData = [
-        {
-          sno: "",
-          ecode: "",
-          name: "",
-          grade: "",
-          designation: "",
-          employeeHome: "",
-          inputType: "Holiday Payout",
-          holidayDate: "",
-        },
-      ];
-      break;
-
-    case "Joining Bonus":
-      templateData = [
-        {
-          sno: "",
-          ecode: "",
-          name: "",
-          grade: "",
-          designation: "",
-          employeeHome: "",
-          inputType: "Joining Bonus",
-          amount: "",
-          remarks: "",
-        },
-      ];
-      break;
-
-    case "Referral Bonus":
-      templateData = [
-        {
-          sno: "",
-          ecode: "",
-          name: "",
-          grade: "",
-          designation: "",
-          employeeHome: "",
-          inputType: "Referral Bonus",
-          amount: "",
-          remarks: "",
-        },
-      ];
-      break;
-
-    case "Retention Bonus":
-      templateData = [
-        {
-          sno: "",
-          ecode: "",
-          name: "",
-          grade: "",
-          designation: "",
-          employeeHome: "",
-          inputType: "Retention Bonus",
-          amount: "",
-          remarks: "",
-        },
-      ];
-      break;
-
-    default:
-      break;
-  }
-
-  const worksheet =
-    XLSX.utils.json_to_sheet(templateData);
-
-  const workbook =
-    XLSX.utils.book_new();
-
-  XLSX.utils.book_append_sheet(
-    workbook,
-    worksheet,
-    activeModule
-  );
-
-  XLSX.writeFile(
-    workbook,
-    `${activeModule}.xlsx`
-  );
+  const link = document.createElement("a");
+  link.href = "/template.csv";
+  link.download = "template.csv";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 };
   const uploadTemplate = () => {
 
@@ -303,33 +189,33 @@ const downloadTemplate = () => {
         );
 
       const formattedRows =
-  jsonData.map((row, index) => ({
-    id: index + 1,
+  jsonData.map((row, index) => {
+    const empCode = row.ecode || row["Employee Code"] || "";
+    const empName = row.name || row["Employee Name"] || "";
+    const grade = row.grade || row["Grade"] || "";
+    const designation = row.designation || row["Designation"] || "";
+    const employeeHome = row.employeeHome || row["Employee Home"] || "";
+    const amount = row.amount || row["Amount"] || "";
+    const overtimeHours = row.overtimeHours || row["Overtime Hours"] || "";
+    const remarks = row.remarks || row["Remarks"] || row["Reason"] || "";
+    const holidayDate = row.holidayDate || row["Holiday Date"] || row["Payment for the month"] || "";
+    const type = row.type || row["Pay Component"] || activeModule;
 
-    sno: row.sno || "",
-
-    empCode: row.ecode || "",
-
-    empName: row.name || "",
-
-    grade: row.grade || "",
-
-    designation: row.designation || "",
-
-    employeeHome: row.employeeHome || "",
-
-    type: activeModule,
-
-    amount: row.amount || "",
-
-    overtimeHours:
-      row.overtimeHours || "",
-
-    remarks:
-      row.remarks || "",
-    holidayDate:
-  row.holidayDate || "",
-  }));
+    return {
+      id: index + 1,
+      sno: row.sno || (index + 1).toString(),
+      empCode,
+      empName,
+      grade,
+      designation,
+      employeeHome,
+      type,
+      amount: amount.toString(),
+      overtimeHours: overtimeHours.toString(),
+      remarks,
+      holidayDate,
+    };
+  });
 
       const taggedRows =
   formattedRows.map(row => ({
