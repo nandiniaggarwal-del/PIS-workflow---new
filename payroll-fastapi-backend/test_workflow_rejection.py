@@ -4,28 +4,10 @@ import os
 import sys
 
 BASE_URL = "http://localhost:5001/api"
-OTP_FILE = "./data/otpStore.json"
-
-def get_otp_for_email(email: str) -> str:
-    if not os.path.exists(OTP_FILE):
-        return None
-    with open(OTP_FILE, "r", encoding="utf-8") as f:
-        data = json.load(f)
-        return data.get(email)
-
 def get_auth_token(email: str) -> str:
-    res = requests.post(f"{BASE_URL}/auth/send-otp", json={"email": email})
+    res = requests.post(f"{BASE_URL}/auth/sso-login", json={"email": email})
     if res.status_code != 200:
-        raise Exception(f"Failed to request OTP for {email}: {res.text}")
-    
-    otp = get_otp_for_email(email)
-    if not otp:
-        raise Exception(f"OTP not found in database file for {email}")
-        
-    res = requests.post(f"{BASE_URL}/auth/verify-otp", json={"email": email, "otp": otp})
-    if res.status_code != 200:
-        raise Exception(f"Failed to verify OTP for {email}: {res.text}")
-        
+        raise Exception(f"Failed to authenticate {email}: {res.text}")
     token = res.json().get("token")
     if not token:
         raise Exception(f"Token missing from response for {email}")

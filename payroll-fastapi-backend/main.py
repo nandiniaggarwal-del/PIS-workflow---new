@@ -80,24 +80,8 @@ async def add_security_headers(request: Request, call_next):
 
 # 2. File Database Paths
 BASE_DATA_DIR = "/Users/Hp/Payroll/PIS-workflow---new/payroll-fastapi-backend/data"
-OTP_FILE = os.path.join(BASE_DATA_DIR, "otpStore.json")
 UPLOADS_DIR = "/Users/Hp/Payroll/PIS-workflow---new/payroll-fastapi-backend/uploads"
 
-def save_otp_to_json_file(email: str, otp: str):
-    # Mirror plain OTP to data/otpStore.json ONLY for local test runner integration (test scripts)
-    try:
-        data = {}
-        if os.path.exists(OTP_FILE):
-            with open(OTP_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-        if otp is None:
-            data.pop(email, None)
-        else:
-            data[email] = otp
-        with open(OTP_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-    except Exception as e:
-        print("Failed to save OTP to JSON file:", e)
 
 def get_timestamp_str():
     return datetime.now().strftime("%d/%m/%Y, %I:%M:%S %p")
@@ -195,8 +179,8 @@ def enforce_rate_limit(key: str, max_requests: int = 5, window_seconds: int = 60
 
 # ================= AUTH ENDPOINTS =================
 
-@app.post("/api/auth/send-otp")
-async def send_otp(request: Request, db: Session = Depends(get_db)):
+@app.post("/api/auth/sso-login")
+async def sso_login(request: Request, db: Session = Depends(get_db)):
     body = await request.json()
     email = body.get("email")
     if not email:
@@ -204,75 +188,13 @@ async def send_otp(request: Request, db: Session = Depends(get_db)):
         
     email = email.strip().lower()
     client_ip = request.client.host if request.client else "unknown_ip"
-    enforce_rate_limit(f"{client_ip}:send_otp")
+    enforce_rate_limit(f"{client_ip}:sso_login")
     
     # Query SQL database users schema (prevents SQLi automatically)
     user = db.query(models.User).filter(models.User.email == email).first()
     if not user:
         raise HTTPException(status_code=401, detail="Email not authorised")
         
-    # Secure OTP generation
-    otp = "".join(secrets.choice("0123456789") for _ in range(6))
-    
-    # Secure OTP storage using SHA-256 Hashing with 5 mins TTL Expiration
-    hashed_otp = hashlib.sha256(otp.encode('utf-8')).hexdigest()
-    expires_at = datetime.utcnow() + timedelta(minutes=5)
-    
-    db_otp = db.query(models.OTPStore).filter(models.OTPStore.email == email).first()
-    if db_otp:
-        db_otp.hashed_otp = hashed_otp
-        db_otp.expires_at = expires_at
-    else:
-        db_otp = models.OTPStore(email=email, hashed_otp=hashed_otp, expires_at=expires_at)
-        db.add(db_otp)
-    db.commit()
-    
-    # Support integration test scripts (mirrors OTP plaintext in local JSON database)
-    save_otp_to_json_file(email, otp)
-    
-    # Send Notification (non-blocking)
-    await send_email(email, "Payroll Login OTP", f"Your OTP is {otp}")
-    
-    return {"message": "OTP sent"}
-
-@app.post("/api/auth/verify-otp")
-async def verify_otp(request: Request, db: Session = Depends(get_db)):
-    body = await request.json()
-    email = body.get("email")
-    otp = body.get("otp")
-    if not email or not otp:
-        raise HTTPException(status_code=400, detail="Email and OTP are required")
-        
-    email = email.strip().lower()
-    client_ip = request.client.host if request.client else "unknown_ip"
-    enforce_rate_limit(f"{client_ip}:verify_otp")
-    
-    db_otp = db.query(models.OTPStore).filter(models.OTPStore.email == email).first()
-    if not db_otp:
-        raise HTTPException(status_code=401, detail="Invalid OTP")
-        
-    # Enforce TTL verification
-    if db_otp.expires_at < datetime.utcnow():
-        db.delete(db_otp)
-        db.commit()
-        save_otp_to_json_file(email, None)
-
-        raise HTTPException(status_code=401, detail="Expired OTP")
-        
-    # Verify secure SHA-256 hash match
-    hashed_input = hashlib.sha256(otp.encode('utf-8')).hexdigest()
-    if db_otp.hashed_otp != hashed_input:
-        raise HTTPException(status_code=401, detail="Invalid OTP")
-        
-    # Clean up OTP records upon verification
-    db.delete(db_otp)
-    db.commit()
-    save_otp_to_json_file(email.lower(), None)
-    
-    user = db.query(models.User).filter(models.User.email == email.lower()).first()
-    if not user:
-         raise HTTPException(status_code=401, detail="User profile not found")
-         
     token = generate_token({"email": user.email, "role": user.role})
     
     return {
@@ -281,6 +203,7 @@ async def verify_otp(request: Request, db: Session = Depends(get_db)):
         "role": user.role,
         "token": token
     }
+
 
 # ================= WORKFLOW ENDPOINTS =================
 

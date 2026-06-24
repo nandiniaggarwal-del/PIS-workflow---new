@@ -1,8 +1,6 @@
 import { BrowserRouter, Routes, Route }
 from "react-router-dom";
 import LoginScreen from "./pages/LoginScreen";
-import VerifyOTPScreen
-from "./pages/VerifyOTPScreen";
 import MakerScreen from "./pages/MakerScreen";
 import HRBPScreen from "./pages/HrbpScreennew";
 import HODScreen from "./pages/HODScreen";
@@ -16,7 +14,6 @@ function App() {
       <Routes>
 
         <Route path="/" element={<LoginScreen />} />
-        <Route path="/verify-otp" element={<VerifyOTPScreen />} />
 <Route path="/maker" element={<MakerScreen />} />
 <Route path="/hrbp" element={<HRBPScreen />} />
 <Route path="/hod" element={<HODScreen />} />

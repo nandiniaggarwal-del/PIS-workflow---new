@@ -14,17 +14,23 @@ export default function LoginScreen() {
 
     try {
 
-      await API.post(
-      "/auth/send-otp",
-      { email }
-    );
+      const response = await API.post(
+        "/auth/sso-login",
+        { email }
+      );
 
-    localStorage.setItem(
-      "loginEmail",
-      email
-    );
+      localStorage.setItem(
+        "user",
+        JSON.stringify(response.data)
+      );
 
-    navigate("/verify-otp");
+      const role = response.data.role.toLowerCase();
+
+      if (role === "maker") navigate("/maker");
+      if (role === "hrbp") navigate("/hrbp");
+      if (role === "hod") navigate("/hod");
+      if (role === "payroll") navigate("/payroll");
+      if (role === "admin") navigate("/admin");
 
     } catch {
 

@@ -7,12 +7,7 @@ class User(Base):
     email = Column(String(255), primary_key=True, index=True, unique=True)
     role = Column(String(50), nullable=False)
 
-class OTPStore(Base):
-    __tablename__ = "otp_store"
-    
-    email = Column(String(255), primary_key=True, unique=True)
-    hashed_otp = Column(String(64), nullable=False)  # SHA-256 hash of the OTP
-    expires_at = Column(DateTime, nullable=False)
+
 
 class WorkflowQueue(Base):
     __tablename__ = "workflow_queue"

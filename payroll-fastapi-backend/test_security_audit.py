@@ -4,14 +4,15 @@ import os
 import sys
 
 BASE_URL = "http://localhost:5001/api"
-OTP_FILE = "./data/otpStore.json"
+def get_auth_token(email: str) -> str:
+    res = requests.post(f"{BASE_URL}/auth/sso-login", json={"email": email})
+    if res.status_code != 200:
+        raise Exception(f"Failed to authenticate {email}: {res.text}")
+    token = res.json().get("token")
+    if not token:
+         raise Exception(f"Token missing from response for {email}")
+    return token
 
-def get_otp_for_email(email: str) -> str:
-    if not os.path.exists(OTP_FILE):
-        return None
-    with open(OTP_FILE, "r", encoding="utf-8") as f:
-        data = json.load(f)
-        return data.get(email)
 
 def main():
     print("=== STARTING PYTHON SECURITY AND RBAC AUDIT VERIFICATION ===")
@@ -46,27 +47,13 @@ def main():
     # 3. Log in as Admin and get Token
     admin_token = ""
     try:
-        print("\n3. Requesting OTP for Admin (amit.khatri@1mg.com)...")
-        requests.post(f"{BASE_URL}/auth/send-otp", json={"email": "amit.khatri@1mg.com"})
-        
-        otp = get_otp_for_email("amit.khatri@1mg.com")
-        if not otp:
-            raise Exception("OTP not generated in otpStore")
-        print(f"   Found OTP in database: {otp}")
-
-        print("   Verifying OTP to obtain token...")
-        res = requests.post(f"{BASE_URL}/auth/verify-otp", json={
-            "email": "amit.khatri@1mg.com",
-            "otp": otp
-        })
-        admin_token = res.json().get("token")
-        if admin_token:
-            print("✅ PASS: Authenticated successfully. Received Token.")
-        else:
-            raise Exception("Token was missing from verification response.")
+        print("\n3. Simulating SSO Login for Admin (amit.khatri@1mg.com)...")
+        admin_token = get_auth_token("amit.khatri@1mg.com")
+        print("✅ PASS: Authenticated successfully. Received Token.")
     except Exception as e:
         print("❌ FAIL: Could not authenticate Admin:", e)
         failed = True
+
 
     # 4. Test Authorized Access as Admin (GET /api/users should be 200)
     if admin_token:
@@ -101,27 +88,13 @@ def main():
     # 6. Log in as Maker and get Token
     maker_token = ""
     try:
-        print("\n6. Requesting OTP for Maker (nandini.aggarwal@1mg.com)...")
-        requests.post(f"{BASE_URL}/auth/send-otp", json={"email": "nandini.aggarwal@1mg.com"})
-        
-        otp = get_otp_for_email("nandini.aggarwal@1mg.com")
-        if not otp:
-            raise Exception("OTP not generated in otpStore")
-        print(f"   Found OTP in database: {otp}")
-
-        print("   Verifying OTP to obtain token...")
-        res = requests.post(f"{BASE_URL}/auth/verify-otp", json={
-            "email": "nandini.aggarwal@1mg.com",
-            "otp": otp
-        })
-        maker_token = res.json().get("token")
-        if maker_token:
-            print("✅ PASS: Authenticated Maker successfully. Received Token.")
-        else:
-            raise Exception("Token was missing from verification response.")
+        print("\n6. Simulating SSO Login for Maker (nandini.aggarwal@1mg.com)...")
+        maker_token = get_auth_token("nandini.aggarwal@1mg.com")
+        print("✅ PASS: Authenticated Maker successfully. Received Token.")
     except Exception as e:
         print("❌ FAIL: Could not authenticate Maker:", e)
         failed = True
+
 
     # 7. Test Authorized Access as Maker (GET /api/workflow/maker should be 200)
     if maker_token:
