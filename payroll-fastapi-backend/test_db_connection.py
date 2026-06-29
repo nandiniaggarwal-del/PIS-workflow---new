@@ -70,32 +70,33 @@ def test_database():
         print("   - Deleted test user.")
         print("✅ User table verified successfully.")
 
-        # 4. Test CRUD on OTPStore table
-        print("\n3. Testing OTPStore table CRUD operations...")
-        test_otp_email = "temp.otp.user@company.com"
-        db.query(models.OTPStore).filter(models.OTPStore.email == test_otp_email).delete()
+        # 4. Test CRUD on Notification table
+        print("\n3. Testing Notification table CRUD operations...")
+        test_notif_email = "temp.notif.user@company.com"
+        db.query(models.Notification).filter(models.Notification.userEmail == test_notif_email).delete()
         db.commit()
         
         # Create
-        new_otp = models.OTPStore(
-            email=test_otp_email, 
-            hashed_otp="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", 
-            expires_at=datetime.utcnow() + timedelta(minutes=5)
+        new_notif = models.Notification(
+            userEmail=test_notif_email,
+            text="Test notification content",
+            timestamp="19/06/2026, 12:00:00 PM",
+            isRead=0
         )
-        db.add(new_otp)
+        db.add(new_notif)
         db.commit()
-        print("   - Inserted OTP record.")
+        print("   - Inserted Notification record.")
         
         # Read
-        otp_rec = db.query(models.OTPStore).filter(models.OTPStore.email == test_otp_email).first()
-        if not otp_rec or otp_rec.hashed_otp != "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855":
-            raise Exception("OTP store read integrity check failed")
+        notif_rec = db.query(models.Notification).filter(models.Notification.userEmail == test_notif_email).first()
+        if not notif_rec or notif_rec.text != "Test notification content":
+            raise Exception("Notification store read integrity check failed")
             
         # Delete
-        db.delete(otp_rec)
+        db.delete(notif_rec)
         db.commit()
-        print("   - Deleted OTP record.")
-        print("✅ OTPStore table verified successfully.")
+        print("   - Deleted Notification record.")
+        print("✅ Notification table verified successfully.")
 
         # 5. Test CRUD on WorkflowQueue table
         print("\n4. Testing WorkflowQueue table CRUD operations...")

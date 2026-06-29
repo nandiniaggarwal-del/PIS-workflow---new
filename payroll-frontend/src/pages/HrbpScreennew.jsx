@@ -17,51 +17,14 @@ const timeline = [
   "Approver (HOD)",
   "Payroll",
 ];
-const user =
-  JSON.parse(
-    localStorage.getItem(
-      "user"
-    )
-  );
-
-const modules = [
-  {
-    icon: Clock3,
-    label: "Overtime",
-  },
-  {
-    icon: BadgeIndianRupee,
-    label: "Incentive",
-  },
-  {
-    icon: CalendarRange,
-    label: "Holiday Payout",
-  },
-  {
-    icon: BadgeIndianRupee,
-    label: "Joining Bonus",
-  },
-  {
-    icon: BadgeIndianRupee,
-    label: "Referral Bonus",
-  },
-  {
-    icon: BadgeIndianRupee,
-    label: "Retention Bonus",
-  },
-];
-
 export default function HRBPScreen() {
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const [modules, setModules] = useState([]);
   const [rows, setRows] = useState([]);
-  const [activeModule, setActiveModule] =
-    useState("Overtime");
-
-  const [hrbpComments, setHrbpComments] =
-  useState("");
-
-  const [flaggedColumns, setFlaggedColumns] =
-    useState([]);
-
+  const [activeModule, setActiveModule] = useState("");
+  const [hrbpComments, setHrbpComments] = useState("");
+  const [flaggedColumns, setFlaggedColumns] = useState([]);
+  const [notifications, setNotifications] = useState([]);
   const navigate = useNavigate();
   const [history, setHistory] = useState([]);
 
@@ -81,9 +44,56 @@ export default function HRBPScreen() {
       }
       return;
     }
+    fetchConfig();
     fetchPayrollData();
     fetchWorkflowHistory();
+    fetchNotifications();
   }, []);
+
+  const fetchConfig = async () => {
+    try {
+      const response = await API.get("/workflow/config");
+      const allHeads = response.data.earning_heads;
+      const currentUser = response.data.currentUser;
+      
+      let filtered = allHeads;
+      if (currentUser && currentUser.allowed_modules && currentUser.allowed_modules.length > 0) {
+        if (!currentUser.allowed_modules.includes("*")) {
+          filtered = allHeads.filter(head => currentUser.allowed_modules.includes(head.name));
+        }
+      }
+      
+      setModules(filtered);
+      if (filtered.length > 0) {
+        setActiveModule(filtered[0].name);
+      }
+    } catch (error) {
+      console.log("Failed to fetch configuration:", error);
+    }
+  };
+
+  const fetchNotifications = async () => {
+    try {
+      const response = await API.get("/notifications");
+      setNotifications(response.data);
+    } catch (error) {
+      console.log("Failed to fetch notifications:", error);
+    }
+  };
+
+  const handleMarkNotificationsRead = async () => {
+    try {
+      await API.post("/notifications/mark-read");
+      fetchNotifications();
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("user");
+    navigate("/");
+  };
 
   const fetchWorkflowHistory = async () => {
     try {
@@ -164,15 +174,15 @@ export default function HRBPScreen() {
           </span>
         </div>
 
-        <div className="flex flex-col gap-2 px-3">
-          {modules.map((item) => {
-            const Icon = item.icon;
+        <div className="flex flex-col gap-2 px-3 overflow-y-auto flex-1 max-h-[calc(100vh-100px)]">
+          {modules.map((item, index) => {
+            let Icon = BadgeIndianRupee;
 
             return (
               <div
-                key={item.label}
+                key={index}
                 onClick={() =>
-                  setActiveModule(item.label)
+                  setActiveModule(item.name)
                 }
                 className={`
                   flex
@@ -185,13 +195,13 @@ export default function HRBPScreen() {
                   min-w-[200px]
 
                   ${
-                    activeModule === item.label
+                    activeModule === item.name
                       ? "bg-[#F26B5B] text-white"
                       : "text-[#B8B8B8] hover:bg-[#1E1E1E] hover:text-white"
                   }
                 `}
               >
-                <Icon size={18} />
+                <Icon size={18} className="flex-shrink-0" />
 
                 <span
                   className="
@@ -200,7 +210,7 @@ export default function HRBPScreen() {
                     text-[13px]
                   "
                 >
-                  {item.label}
+                  {item.name}
                 </span>
               </div>
             );
@@ -226,15 +236,133 @@ export default function HRBPScreen() {
           </div>
 
           <div className="flex items-center gap-5">
-            <Bell size={17} />
+            <div className="relative group" onMouseEnter={handleMarkNotificationsRead}>
+              <div className="relative cursor-pointer">
+                <Bell size={17} />
+                {notifications.filter(n => !n.isRead).length > 0 && (
+                  <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#F26B5B] text-white text-[9px] flex items-center justify-center">
+                    {notifications.filter(n => !n.isRead).length}
+                  </div>
+                )}
+              </div>
+              <div
+                className="
+                  absolute
+                  right-0
+                  top-[35px]
+                  w-[300px]
+                  bg-white
+                  border
+                  border-[#E7E3DC]
+                  rounded-2xl
+                  shadow-xl
+                  opacity-0
+                  invisible
+                  group-hover:opacity-100
+                  group-hover:visible
+                  transition-all
+                  duration-200
+                  z-50
+                  overflow-hidden
+                "
+              >
+                <div className="px-4 py-3 border-b border-[#EFEAE2]">
+                  <h3 className="text-[13px] font-semibold">
+                    Notifications
+                  </h3>
+                </div>
+                <div className="max-h-[320px] overflow-y-auto">
+                  {notifications.length > 0 ? (
+                    notifications.map((item, index) => (
+                      <div
+                        key={index}
+                        className={`
+                          px-4
+                          py-3
+                          border-b
+                          border-[#F4F1EC]
+                          hover:bg-[#FAF7F2]
+                          cursor-pointer
+                          ${!item.isRead ? "bg-[#FFF9F2]" : ""}
+                        `}
+                      >
+                        <p className="text-[12px] text-[#333]">
+                          {item.text}
+                        </p>
+                        <p className="text-[10px] text-[#999] mt-1">
+                          {item.time}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-[12px] text-[#777] p-4 text-center">
+                      No notifications
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
 
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center text-[11px]">
-                HR
+            <div className="relative group">
+              <div className="flex items-center gap-3 cursor-pointer">
+                <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center text-[11px]">
+                  {user?.name ? user.name.split(" ").map(n => n[0]).join("").toUpperCase() : "HR"}
+                </div>
+
+                <div className="text-[12px] font-medium">
+                  {user?.name || "HRBP"}
+                </div>
               </div>
 
-              <div className="text-[12px] font-medium">
-                {user?.name}
+              <div
+                className="
+                  absolute
+                  right-0
+                  top-[42px]
+                  w-[220px]
+                  bg-white
+                  border
+                  border-[#E7E3DC]
+                  rounded-2xl
+                  shadow-xl
+                  opacity-0
+                  invisible
+                  group-hover:opacity-100
+                  group-hover:visible
+                  transition-all
+                  duration-200
+                  z-50
+                  overflow-hidden
+                "
+              >
+                <div className="px-4 py-4 border-b border-[#EFEAE2]">
+                  <p className="text-[13px] font-semibold">
+                    {user?.name}
+                  </p>
+                  <p className="text-[11px] text-[#888] mt-1">
+                    HRBP
+                  </p>
+                </div>
+                <div className="flex flex-col text-[12px] bg-white text-left">
+                  <div 
+                    onClick={() => alert(`Profile Details:\n\nName: ${user?.name || "User"}\nEmail: ${user?.email || "N/A"}\nEmployee ID: ${user?.employee_id || "N/A"}\nRole: ${user?.role || "N/A"}`)}
+                    className="px-4 py-3 hover:bg-[#FAF7F2] cursor-pointer border-b border-[#F5F1EB]"
+                  >
+                    Profile
+                  </div>
+                  <div 
+                    onClick={() => alert("For help and support, please contact the IT Payroll Team at: it.team@1mg.com")}
+                    className="px-4 py-3 hover:bg-[#FAF7F2] cursor-pointer border-b border-[#F5F1EB]"
+                  >
+                    Help & Support
+                  </div>
+                  <div 
+                    onClick={handleLogout}
+                    className="px-4 py-3 hover:bg-[#FAF7F2] cursor-pointer text-red-600 font-medium"
+                  >
+                    Logout
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -308,45 +436,52 @@ export default function HRBPScreen() {
 
           <div className="bg-white border border-[#E7E3DC] rounded-2xl p-4 mb-5">
             <div className="flex items-center justify-between">
-              {timeline.map((step, index) => (
-                <div
-                  key={step}
-                  className="flex-1 flex flex-col items-center relative"
-                >
-                  {index !==
-                    timeline.length - 1 && (
-                    <div
-                      className="
-                        absolute
-                        top-[9px]
-                        left-1/2
-                        w-full
-                        h-[2px]
-                        bg-[#E5E0D8]
-                      "
-                    />
-                  )}
+              {(() => {
+                const activeModuleConfig = modules.find(m => m.name === activeModule);
+                const hasHrbp = activeModuleConfig ? activeModuleConfig.hrbp !== "NA" : true;
+                const currentTimeline = hasHrbp 
+                  ? ["Maker (Business SPOC)", "HRBP", "Approver (HOD)", "Payroll"]
+                  : ["Maker (Business SPOC)", "Approver (HOD)", "Payroll"];
 
+                return currentTimeline.map((step, index) => (
                   <div
-                    className={`
-                      w-5
-                      h-5
-                      rounded-full
-                      z-10
+                    key={step}
+                    className="flex-1 flex flex-col items-center relative"
+                  >
+                    {index !== currentTimeline.length - 1 && (
+                      <div
+                        className="
+                          absolute
+                          top-[9px]
+                          left-1/2
+                          w-full
+                          h-[2px]
+                          bg-[#E5E0D8]
+                        "
+                      />
+                    )}
 
-                      ${
-                        index <= 1
-                          ? "bg-[#F26B5B]"
-                          : "bg-[#D8D2C7]"
-                      }
-                    `}
-                  />
+                    <div
+                      className={`
+                        w-5
+                        h-5
+                        rounded-full
+                        z-10
 
-                  <p className="mt-2 text-[11px]">
-                    {step}
-                  </p>
-                </div>
-              ))}
+                        ${
+                          index <= 1
+                            ? "bg-[#F26B5B]"
+                            : "bg-[#D8D2C7]"
+                        }
+                      `}
+                    />
+
+                    <p className="mt-2 text-[11px] font-medium text-[#555]">
+                      {step}
+                    </p>
+                  </div>
+                ));
+              })()}
             </div>
           </div>
 
@@ -449,22 +584,17 @@ onChange={(e) =>
             <table className="min-w-[1600px] border-collapse">
               <thead className="bg-[#FAF7F2]">
                 <tr>
-  <th className="p-3">S No</th>
-  <th className="p-3">Ecode</th>
-  <th className="p-3">Name</th>
-  <th className="p-3">Grade</th>
-  <th className="p-3">Designation</th>
-  <th className="p-3">Employee Home</th>
-  <th className="p-3">Input Type</th>
-  <th className="p-3">
-    {activeModule === "Overtime"
-      ? "OT Hours"
-      : activeModule === "Holiday Payout"
-      ? "Date"
-      : "Amount"}
-  </th>
-  <th className="p-3">Remarks</th>
-</tr>
+                  <th className="p-3">S No</th>
+                  <th className="p-3">Employee Code</th>
+                  <th className="p-3">Pay Component</th>
+                  <th className="p-3">Payment Frequency</th>
+                  <th className="p-3">Effective From</th>
+                  <th className="p-3">Effective To</th>
+                  <th className="p-3">Amount</th>
+                  <th className="p-3">Reason</th>
+                  <th className="p-3">Remarks</th>
+                  <th className="p-3">Payment for the month</th>
+                </tr>
               </thead>
 
               <tbody>
@@ -485,7 +615,7 @@ onChange={(e) =>
       </td>
 
       <td className="p-3 text-[12px]">
-        {row.empName}
+        {row.type}
       </td>
 
       <td className="p-3 text-[12px]">
@@ -501,37 +631,26 @@ onChange={(e) =>
       </td>
 
       <td className="p-3 text-[12px]">
-        {row.type}
+        {row.amount}
       </td>
 
       <td className="p-3 text-[12px]">
-
-        {activeModule === "Overtime"
-          ? row.overtimeHours
-          : activeModule === "Holiday Payout"
-          ? row.holidayDate
-          : row.amount}
-
+        {row.overtimeHours}
       </td>
 
       <td className="p-3">
-
         <input
           value={row.remarks || ""}
           onChange={(e) => {
             const updated = rows.map(r => r.id === row.id ? { ...r, remarks: e.target.value } : r);
             setRows(updated);
           }}
-          className="
-            w-full
-            border
-            border-[#E7E3DC]
-            rounded-lg
-            p-2
-            text-[12px]
-          "
+          className="w-full border border-[#E7E3DC] rounded-lg p-2 text-[12px]"
         />
+      </td>
 
+      <td className="p-3 text-[12px]">
+        {row.holidayDate}
       </td>
 
     </tr>

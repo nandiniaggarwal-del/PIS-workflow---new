@@ -11,45 +11,12 @@ import {
   Download,
 } from "lucide-react";
 
-const modules = [
-  {
-    icon: Clock3,
-    label: "Overtime",
-  },
-  {
-    icon: BadgeIndianRupee,
-    label: "Incentive",
-  },
-  {
-    icon: CalendarRange,
-    label: "Holiday Payout",
-  },
-  {
-    icon: BadgeIndianRupee,
-    label: "Joining Bonus",
-  },
-  {
-    icon: BadgeIndianRupee,
-    label: "Referral Bonus",
-  },
-  {
-    icon: BadgeIndianRupee,
-    label: "Retention Bonus",
-  },
-];
-const user =
-  JSON.parse(
-    localStorage.getItem(
-      "user"
-    )
-  );
-
 export default function PayrollScreen() {
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const [modules, setModules] = useState([]);
   const [rows, setRows] = useState([]);
-
-  const [activeModule, setActiveModule] =
-    useState("Overtime");
-
+  const [activeModule, setActiveModule] = useState("");
+  const [notifications, setNotifications] = useState([]);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -68,126 +35,108 @@ export default function PayrollScreen() {
       }
       return;
     }
+    fetchConfig();
     fetchPayrollData();
+    fetchNotifications();
   }, []);
 
-  const filteredRows =
-  rows.filter(
-    row =>
-      row.module === activeModule
-  );
+  const fetchConfig = async () => {
+    try {
+      const response = await API.get("/workflow/config");
+      const allHeads = response.data.earning_heads;
+      const currentUser = response.data.currentUser;
+      
+      let filtered = allHeads;
+      if (currentUser && currentUser.allowed_modules && currentUser.allowed_modules.length > 0) {
+        if (!currentUser.allowed_modules.includes("*")) {
+          filtered = allHeads.filter(head => currentUser.allowed_modules.includes(head.name));
+        }
+      }
+      
+      setModules(filtered);
+      if (filtered.length > 0) {
+        setActiveModule(filtered[0].name);
+      }
+    } catch (error) {
+      console.log("Failed to fetch configuration:", error);
+    }
+  };
+
+  const fetchNotifications = async () => {
+    try {
+      const response = await API.get("/notifications");
+      setNotifications(response.data);
+    } catch (error) {
+      console.log("Failed to fetch notifications:", error);
+    }
+  };
+
+  const handleMarkNotificationsRead = async () => {
+    try {
+      await API.post("/notifications/mark-read");
+      fetchNotifications();
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("user");
+    navigate("/");
+  };
 
   const fetchPayrollData = async () => {
     try {
-      const response =
-        await API.get("/workflow/payroll");
-
+      const response = await API.get("/workflow/payroll");
       setRows(response.data);
     } catch (error) {
       console.log(error);
     }
   };
 
-<div className="grid grid-cols-3 gap-4 mb-5">
-
-  <div className="bg-white border border-[#E7E3DC] rounded-2xl p-5">
-
-    <p className="text-[11px] text-[#777]">
-      Total Records
-    </p>
-
-    <h2 className="text-[24px] font-semibold mt-2">
-      {filteredRows.length}
-    </h2>
-
-  </div>
-
-  <div className="bg-white border border-[#E7E3DC] rounded-2xl p-5">
-
-    <p className="text-[11px] text-[#777]">
-      Module
-    </p>
-
-    <h2 className="text-[24px] font-semibold mt-2">
-      {activeModule}
-    </h2>
-
-  </div>
-
-  <div className="bg-white border border-[#E7E3DC] rounded-2xl p-5">
-
-    <p className="text-[11px] text-[#777]">
-      Status
-    </p>
-
-    <h2 className="text-[24px] font-semibold mt-2">
-      Approved
-    </h2>
-
-  </div>
-
-</div>
+  const filteredRows = rows.filter(row => row.module === activeModule);
 
 
 
- const exportExcel = () => {
-
-  const csvRows = [];
-
-  csvRows.push(
-    [
-      "Employee Code",
-      "Employee Name",
-      "Input Type",
-      activeModule === "Overtime"
-        ? "OT Hours"
-        : activeModule === "Holiday Payout"
-        ? "Date"
-        : "Amount",
-      "Remarks",
-    ].join(",")
-  );
-
-  filteredRows.forEach((row) => {
-
+  const exportExcel = () => {
+    const csvRows = [];
     csvRows.push(
       [
-        row.empCode,
-        row.empName,
-        row.type,
-
-        activeModule === "Overtime"
-          ? row.overtimeHours
-          : activeModule === "Holiday Payout"
-          ? row.holidayDate
-          : row.amount,
-
-        row.remarks,
+        "Employee Code",
+        "Pay Component",
+        "Payment Frequency",
+        "Effective From",
+        "Effective To",
+        "Amount",
+        "Reason",
+        "Remarks",
+        "Payment for the month",
       ].join(",")
     );
 
-  });
+    filteredRows.forEach((row) => {
+      csvRows.push(
+        [
+          `"${row.empCode || ""}"`,
+          `"${row.type || ""}"`,
+          `"${row.grade || ""}"`,
+          `"${row.designation || ""}"`,
+          `"${row.employeeHome || ""}"`,
+          `"${row.amount || ""}"`,
+          `"${row.overtimeHours || ""}"`,
+          `"${row.remarks || ""}"`,
+          `"${row.holidayDate || ""}"`,
+        ].join(",")
+      );
+    });
 
-  const blob = new Blob(
-    [csvRows.join("\n")],
-    {
-      type: "text/csv",
-    }
-  );
-
-  const url =
-    window.URL.createObjectURL(blob);
-
-  const link =
-    document.createElement("a");
-
-  link.href = url;
-
-  link.download =
-    `${activeModule}.csv`;
-
-  link.click();
-};
+    const blob = new Blob([csvRows.join("\n")], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${activeModule}.csv`;
+    link.click();
+  };
 
   return (
     <div className="flex h-screen bg-[#F5F5F3] overflow-hidden">
@@ -232,17 +181,15 @@ export default function PayrollScreen() {
 
         </div>
 
-        <div className="flex flex-col gap-2 px-3">
-
-          {modules.map((item) => {
-
-            const Icon = item.icon;
+        <div className="flex flex-col gap-2 px-3 overflow-y-auto flex-1 max-h-[calc(100vh-100px)]">
+          {modules.map((item, index) => {
+            let Icon = BadgeIndianRupee;
 
             return (
               <div
-                key={item.label}
+                key={index}
                 onClick={() =>
-                  setActiveModule(item.label)
+                  setActiveModule(item.name)
                 }
                 className={`
                   flex
@@ -255,13 +202,13 @@ export default function PayrollScreen() {
                   min-w-[200px]
 
                   ${
-                    activeModule === item.label
+                    activeModule === item.name
                       ? "bg-[#F26B5B] text-white"
-                      : "text-[#B8B8B8]"
+                      : "text-[#B8B8B8] hover:bg-[#1E1E1E] hover:text-white"
                   }
                 `}
               >
-                <Icon size={18} />
+                <Icon size={18} className="flex-shrink-0" />
 
                 <span
                   className="
@@ -270,7 +217,7 @@ export default function PayrollScreen() {
                     text-[13px]
                   "
                 >
-                  {item.label}
+                  {item.name}
                 </span>
               </div>
             );
@@ -300,21 +247,137 @@ export default function PayrollScreen() {
           </div>
 
           <div className="flex items-center gap-5">
-
-            <Bell size={17} />
-
-            <div className="flex items-center gap-3">
-
-              <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center text-[11px]">
-                PY
+            <div className="relative group" onMouseEnter={handleMarkNotificationsRead}>
+              <div className="relative cursor-pointer">
+                <Bell size={17} />
+                {notifications.filter(n => !n.isRead).length > 0 && (
+                  <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#F26B5B] text-white text-[9px] flex items-center justify-center">
+                    {notifications.filter(n => !n.isRead).length}
+                  </div>
+                )}
               </div>
 
-              <div className="text-[12px] font-medium">
-                Payroll User
-              </div>
+              <div
+                className="
+                  absolute
+                  right-0
+                  top-[35px]
+                  w-[300px]
+                  bg-white
+                  border
+                  border-[#E7E3DC]
+                  rounded-2xl
+                  shadow-xl
+                  opacity-0
+                  invisible
+                  group-hover:opacity-100
+                  group-hover:visible
+                  transition-all
+                  duration-200
+                  z-50
+                  overflow-hidden
+                "
+              >
+                <div className="px-4 py-3 border-b border-[#EFEAE2]">
+                  <h3 className="text-[13px] font-semibold">
+                    Notifications
+                  </h3>
+                </div>
 
+                <div className="max-h-[320px] overflow-y-auto">
+                  {notifications.length > 0 ? (
+                    notifications.map((item, index) => (
+                      <div
+                        key={index}
+                        className={`
+                          px-4
+                          py-3
+                          border-b
+                          border-[#F4F1EC]
+                          hover:bg-[#FAF7F2]
+                          cursor-pointer
+                          ${!item.isRead ? "bg-[#FFF9F2]" : ""}
+                        `}
+                      >
+                        <p className="text-[12px] text-[#333]">
+                          {item.text}
+                        </p>
+                        <p className="text-[10px] text-[#999] mt-1">
+                          {item.time}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-[12px] text-[#777] p-4 text-center">
+                      No notifications
+                    </p>
+                  )}
+                </div>
+              </div>
             </div>
 
+            <div className="relative group">
+              <div className="flex items-center gap-3 cursor-pointer">
+                <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center text-[11px]">
+                  {user?.name ? user.name.split(" ").map(n => n[0]).join("").toUpperCase() : "PY"}
+                </div>
+
+                <div className="text-[12px] font-medium">
+                  {user?.name || "Payroll User"}
+                </div>
+              </div>
+
+              <div
+                className="
+                  absolute
+                  right-0
+                  top-[42px]
+                  w-[220px]
+                  bg-white
+                  border
+                  border-[#E7E3DC]
+                  rounded-2xl
+                  shadow-xl
+                  opacity-0
+                  invisible
+                  group-hover:opacity-100
+                  group-hover:visible
+                  transition-all
+                  duration-200
+                  z-50
+                  overflow-hidden
+                "
+              >
+                <div className="px-4 py-4 border-b border-[#EFEAE2]">
+                  <p className="text-[13px] font-semibold">
+                    {user?.name}
+                  </p>
+                  <p className="text-[11px] text-[#888] mt-1">
+                    Payroll Admin
+                  </p>
+                </div>
+                <div className="flex flex-col text-[12px] bg-white text-left">
+                  <div 
+                    onClick={() => alert(`Profile Details:\n\nName: ${user?.name || "User"}\nEmail: ${user?.email || "N/A"}\nEmployee ID: ${user?.employee_id || "N/A"}\nRole: ${user?.role || "N/A"}`)}
+                    className="px-4 py-3 hover:bg-[#FAF7F2] cursor-pointer border-b border-[#F5F1EB]"
+                  >
+                    Profile
+                  </div>
+                  <div 
+                    onClick={() => alert("For help and support, please contact the IT Payroll Team at: it.team@1mg.com")}
+                    className="px-4 py-3 hover:bg-[#FAF7F2] cursor-pointer border-b border-[#F5F1EB]"
+                  >
+                    Help & Support
+                  </div>
+                  <div 
+                    onClick={handleLogout}
+                    className="px-4 py-3 hover:bg-[#FAF7F2] cursor-pointer text-red-600 font-medium"
+                  >
+                    Logout
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
         </div>
@@ -323,30 +386,52 @@ export default function PayrollScreen() {
 
         <div className="flex-1 overflow-y-auto p-5">
 
-  <div className="bg-white border border-[#E7E3DC] rounded-2xl overflow-hidden mb-5">
+          <div className="grid grid-cols-3 gap-4 mb-5">
+            <div className="bg-white border border-[#E7E3DC] rounded-2xl p-5">
+              <p className="text-[11px] text-[#777]">
+                Total Records
+              </p>
+              <h2 className="text-[24px] font-semibold mt-2">
+                {filteredRows.length}
+              </h2>
+            </div>
+
+            <div className="bg-white border border-[#E7E3DC] rounded-2xl p-5">
+              <p className="text-[11px] text-[#777]">
+                Module
+              </p>
+              <h2 className="text-[24px] font-semibold mt-2 font-mono text-[16px]">
+                {activeModule}
+              </h2>
+            </div>
+
+            <div className="bg-white border border-[#E7E3DC] rounded-2xl p-5">
+              <p className="text-[11px] text-[#777]">
+                Status
+              </p>
+              <h2 className="text-[24px] font-semibold mt-2">
+                Approved
+              </h2>
+            </div>
+          </div>
+
+          <div className="bg-white border border-[#E7E3DC] rounded-2xl overflow-hidden mb-5">
 
     <table className="w-full">
 
       <thead className="bg-[#FAF7F2]">
-
         <tr>
-          <th>S No</th>
-<th>Ecode</th>
-<th>Name</th>
-<th>Grade</th>
-<th>Designation</th>
-<th>Employee Home</th>
-<th>Input Type</th>
-<th>
-  {activeModule === "Overtime"
-    ? "OT Hours"
-    : activeModule === "Holiday Payout"
-    ? "Date"
-    : "Amount"}
-</th>
-<th>Remarks</th>
+          <th className="p-3 text-left">S No</th>
+          <th className="p-3 text-left">Employee Code</th>
+          <th className="p-3 text-left">Pay Component</th>
+          <th className="p-3 text-left">Payment Frequency</th>
+          <th className="p-3 text-left">Effective From</th>
+          <th className="p-3 text-left">Effective To</th>
+          <th className="p-3 text-left">Amount</th>
+          <th className="p-3 text-left">Reason</th>
+          <th className="p-3 text-left">Remarks</th>
+          <th className="p-3 text-left">Payment for the month</th>
         </tr>
-
       </thead>
 
       <tbody>
@@ -367,7 +452,7 @@ export default function PayrollScreen() {
       </td>
 
       <td className="p-3 text-[12px]">
-        {row.empName}
+        {row.type}
       </td>
 
       <td className="p-3 text-[12px]">
@@ -383,21 +468,19 @@ export default function PayrollScreen() {
       </td>
 
       <td className="p-3 text-[12px]">
-        {row.type}
+        {row.amount}
       </td>
 
       <td className="p-3 text-[12px]">
-
-        {activeModule === "Overtime"
-          ? row.overtimeHours
-          : activeModule === "Holiday Payout"
-          ? row.holidayDate
-          : row.amount}
-
+        {row.overtimeHours}
       </td>
 
       <td className="p-3 text-[12px]">
         {row.remarks}
+      </td>
+
+      <td className="p-3 text-[12px]">
+        {row.holidayDate}
       </td>
 
     </tr>

@@ -20,50 +20,13 @@ const timeline = [
   "HOD",
   "Payroll",
 ];
-const user =
-  JSON.parse(
-    localStorage.getItem(
-      "user"
-    )
-  );
-
-
-const modules = [
-  {
-    icon: Clock3,
-    label: "Overtime",
-  },
-  {
-    icon: BadgeIndianRupee,
-    label: "Incentive",
-  },
-  {
-    icon: CalendarRange,
-    label: "Holiday Payout",
-  },
-  {
-    icon: BadgeIndianRupee,
-    label: "Joining Bonus",
-  },
-  {
-    icon: BadgeIndianRupee,
-    label: "Referral Bonus",
-  },
-  {
-    icon: BadgeIndianRupee,
-    label: "Retention Bonus",
-  },
-];
-
 const MakerScreen = () => {
-
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const [modules, setModules] = useState([]);
   const [rows, setRows] = useState([]);
-  const [selectedFile, setSelectedFile] =
-    useState(null);
-
-  const [activeModule, setActiveModule] =
-    useState("Overtime");
-
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [activeModule, setActiveModule] = useState("");
+  const [notifications, setNotifications] = useState([]);
   const navigate = useNavigate();
   const [history, setHistory] = useState([]);
 
@@ -83,9 +46,56 @@ const MakerScreen = () => {
       }
       return;
     }
+    fetchConfig();
     fetchPayrollData();
     fetchWorkflowHistory();
+    fetchNotifications();
   }, []);
+
+  const fetchConfig = async () => {
+    try {
+      const response = await API.get("/workflow/config");
+      const allHeads = response.data.earning_heads;
+      const currentUser = response.data.currentUser;
+      
+      let filtered = allHeads;
+      if (currentUser && currentUser.allowed_modules && currentUser.allowed_modules.length > 0) {
+        if (!currentUser.allowed_modules.includes("*")) {
+          filtered = allHeads.filter(head => currentUser.allowed_modules.includes(head.name));
+        }
+      }
+      
+      setModules(filtered);
+      if (filtered.length > 0) {
+        setActiveModule(filtered[0].name);
+      }
+    } catch (error) {
+      console.log("Failed to fetch configuration:", error);
+    }
+  };
+
+  const fetchNotifications = async () => {
+    try {
+      const response = await API.get("/notifications");
+      setNotifications(response.data);
+    } catch (error) {
+      console.log("Failed to fetch notifications:", error);
+    }
+  };
+
+  const handleMarkNotificationsRead = async () => {
+    try {
+      await API.post("/notifications/mark-read");
+      fetchNotifications();
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("user");
+    navigate("/");
+  };
 
   const fetchWorkflowHistory = async () => {
     try {
@@ -188,34 +198,35 @@ const downloadTemplate = () => {
           worksheet
         );
 
-      const formattedRows =
-  jsonData.map((row, index) => {
-    const empCode = row.ecode || row["Employee Code"] || "";
-    const empName = row.name || row["Employee Name"] || "";
-    const grade = row.grade || row["Grade"] || "";
-    const designation = row.designation || row["Designation"] || "";
-    const employeeHome = row.employeeHome || row["Employee Home"] || "";
-    const amount = row.amount || row["Amount"] || "";
-    const overtimeHours = row.overtimeHours || row["Overtime Hours"] || "";
-    const remarks = row.remarks || row["Remarks"] || row["Reason"] || "";
-    const holidayDate = row.holidayDate || row["Holiday Date"] || row["Payment for the month"] || "";
-    const type = row.type || row["Pay Component"] || activeModule;
+      const activeModuleConfig = modules.find(m => m.name === activeModule);
+      const inputType = activeModuleConfig ? activeModuleConfig.input_type : "amount";
 
-    return {
-      id: index + 1,
-      sno: row.sno || (index + 1).toString(),
-      empCode,
-      empName,
-      grade,
-      designation,
-      employeeHome,
-      type,
-      amount: amount.toString(),
-      overtimeHours: overtimeHours.toString(),
-      remarks,
-      holidayDate,
-    };
-  });
+      const formattedRows = jsonData.map((row, index) => {
+        const empCode = row.ecode || row["Employee Code"] || "";
+        const empName = row.name || row["Employee Name"] || "";
+        const grade = row.grade || row["Grade"] || row["Payment Frequency"] || "";
+        const designation = row.designation || row["Designation"] || row["Effective From"] || "";
+        const employeeHome = row.employeeHome || row["Employee Home"] || row["Effective To"] || "";
+        const amount = row.amount !== undefined ? row.amount.toString() : (row["Amount"] !== undefined ? row["Amount"].toString() : "");
+        const overtimeHours = row.overtimeHours || row["Reason"] || "";
+        const remarks = row.remarks || row["Remarks"] || "";
+        const holidayDate = row.holidayDate || row["Payment for the month"] || "";
+
+        return {
+          id: Date.now() + index,
+          sno: index + 1,
+          empCode,
+          empName,
+          grade,
+          designation,
+          employeeHome,
+          type: activeModule,
+          amount,
+          overtimeHours,
+          remarks,
+          holidayDate,
+        };
+      });
 
       const taggedRows =
   formattedRows.map(row => ({
@@ -287,19 +298,18 @@ const filteredRows =
 
         {/* MENU */}
 
-        <div className="flex flex-col gap-2 px-3">
+        <div className="flex flex-col gap-2 px-3 overflow-y-auto flex-1 max-h-[calc(100vh-100px)]">
 
           {modules.map((item, index) => {
-            const Icon = item.icon;
+            let Icon = BadgeIndianRupee;
 
-            const active =
-              activeModule === item.label;
+            const active = activeModule === item.name;
             
             return (
               <div
                 key={index}
                 onClick={() =>
-                  setActiveModule(item.label)
+                  setActiveModule(item.name)
                 }
                 className={`
                   flex
@@ -319,7 +329,7 @@ const filteredRows =
                 `}
               >
 
-                <Icon size={18} />
+                <Icon size={18} className="flex-shrink-0" />
 
                 <span
                   className="
@@ -331,7 +341,7 @@ const filteredRows =
                     transition-all
                   "
                 >
-                  {item.label}
+                  {item.name}
                 </span>
               </div>
             );
@@ -362,15 +372,17 @@ const filteredRows =
 
             {/* NOTIFICATIONS */}
 
-            <div className="relative group">
+            <div className="relative group" onMouseEnter={handleMarkNotificationsRead}>
 
               <div className="relative cursor-pointer">
 
                 <Bell size={17} />
 
-                <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#F26B5B] text-white text-[9px] flex items-center justify-center">
-                  3
-                </div>
+                {notifications.filter(n => !n.isRead).length > 0 && (
+                  <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#F26B5B] text-white text-[9px] flex items-center justify-center">
+                    {notifications.filter(n => !n.isRead).length}
+                  </div>
+                )}
               </div>
 
               <div
@@ -394,92 +406,40 @@ const filteredRows =
                   overflow-hidden
                 "
               >
-                <div className="bg-white border border-[#E7E3DC] rounded-2xl p-5 mb-5">
-
-  <h3 className="text-[13px] font-semibold mb-3">
-    Remarks History
-  </h3>
-
-  {history?.length ? (
-    <div className="max-h-[150px] overflow-y-auto pr-2">
-      {history.map(
-        (item,index) => (
-
-          <div
-            key={index}
-            className="border-b border-[#EFEAE2] py-3 last:border-none"
-          >
-
-            <p className="text-[12px] font-medium">
-              {item.action}
-            </p>
-
-            <p className="text-[11px] text-[#666]">
-              {item.user}
-            </p>
-
-            {item.remarks && (
-
-              <p className="text-[12px] text-[#F26B5B] mt-1">
-                {item.remarks}
-              </p>
-
-            )}
-
-            <p className="text-[10px] text-[#999]">
-              {item.timestamp}
-            </p>
-
-          </div>
-
-        )
-      )}
-    </div>
-  ) : (
-
-    <p className="text-[12px] text-[#777]">
-      No remarks available
-    </p>
-
-  )}
-
-</div>
-
                 <div className="px-4 py-3 border-b border-[#EFEAE2]">
-
                   <h3 className="text-[13px] font-semibold">
                     Notifications
                   </h3>
                 </div>
 
                 <div className="max-h-[320px] overflow-y-auto">
-
-                  {[
-  "Overtime sheet pending HRBP review",
-  "Incentive sheet pending HRBP review",
-  "Holiday payout pending HRBP review",
-].map((item, index) => (
-                    <div
-                      key={index}
-                      className="
-                        px-4
-                        py-3
-                        border-b
-                        border-[#F4F1EC]
-                        hover:bg-[#FAF7F2]
-                        cursor-pointer
-                      "
-                    >
-
-                      <p className="text-[12px] text-[#333]">
-                        {item}
-                      </p>
-
-                      <p className="text-[10px] text-[#999] mt-1">
-                        2 mins ago
-                      </p>
-                    </div>
-                  ))}
+                  {notifications.length > 0 ? (
+                    notifications.map((item, index) => (
+                      <div
+                        key={index}
+                        className={`
+                          px-4
+                          py-3
+                          border-b
+                          border-[#F4F1EC]
+                          hover:bg-[#FAF7F2]
+                          cursor-pointer
+                          ${!item.isRead ? "bg-[#FFF9F2]" : ""}
+                        `}
+                      >
+                        <p className="text-[12px] text-[#333]">
+                          {item.text}
+                        </p>
+                        <p className="text-[10px] text-[#999] mt-1">
+                          {item.time}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-[12px] text-[#777] p-4 text-center">
+                      No notifications
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -491,11 +451,11 @@ const filteredRows =
               <div className="flex items-center gap-3 cursor-pointer">
 
                 <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center text-[11px]">
-                  NA
+                  {user?.name ? user.name.split(" ").map(n => n[0]).join("").toUpperCase() : "MA"}
                 </div>
 
                 <div className="text-[12px] font-medium">
-                  Nandini
+                  {user?.name || "User"}
                 </div>
               </div>
 
@@ -532,29 +492,26 @@ const filteredRows =
                   </p>
                 </div>
 
-                {[
-                  "Account Settings",
-                  "Profile",
-                  "Notifications",
-                  "Help & Support",
-                  "Logout",
-                ].map((item, index) => (
-                  <div
-                    key={index}
-                    className="
-                      px-4
-                      py-3
-                      text-[12px]
-                      hover:bg-[#FAF7F2]
-                      cursor-pointer
-                      border-b
-                      border-[#F5F1EB]
-                      last:border-none
-                    "
+                <div className="flex flex-col text-[12px] bg-white">
+                  <div 
+                    onClick={() => alert(`Profile Details:\n\nName: ${user?.name || "User"}\nEmail: ${user?.email || "N/A"}\nEmployee ID: ${user?.employee_id || "N/A"}\nRole: ${user?.role || "N/A"}`)}
+                    className="px-4 py-3 hover:bg-[#FAF7F2] cursor-pointer border-b border-[#F5F1EB]"
                   >
-                    {item}
+                    Profile
                   </div>
-                ))}
+                  <div 
+                    onClick={() => alert("For help and support, please contact the IT Payroll Team at: it.team@1mg.com")}
+                    className="px-4 py-3 hover:bg-[#FAF7F2] cursor-pointer border-b border-[#F5F1EB]"
+                  >
+                    Help & Support
+                  </div>
+                  <div 
+                    onClick={handleLogout}
+                    className="px-4 py-3 hover:bg-[#FAF7F2] cursor-pointer text-red-600 font-medium"
+                  >
+                    Logout
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -684,48 +641,56 @@ const filteredRows =
 
             <div className="flex items-center justify-between">
 
-              {timeline.map((step, index) => (
-                <div
-                  key={step}
-                  className="flex-1 flex flex-col items-center relative"
-                >
+              {(() => {
+                const activeModuleConfig = modules.find(m => m.name === activeModule);
+                const hasHrbp = activeModuleConfig ? activeModuleConfig.hrbp !== "NA" : true;
+                const currentTimeline = hasHrbp 
+                  ? ["Maker (Business SPOC)", "HRBP", "Approver (HOD)", "Payroll"]
+                  : ["Maker (Business SPOC)", "Approver (HOD)", "Payroll"];
 
-                  {index !== timeline.length - 1 && (
+                return currentTimeline.map((step, index) => (
+                  <div
+                    key={step}
+                    className="flex-1 flex flex-col items-center relative"
+                  >
+
+                    {index !== currentTimeline.length - 1 && (
+                      <div
+                        className={`
+                          absolute
+                          top-[9px]
+                          left-1/2
+                          w-full
+                          h-[2px]
+
+                          ${index === 0
+                            ? "bg-[#F26B5B]"
+                            : "bg-[#E5E0D8]"
+                          }
+                        `}
+                      />
+                    )}
+
                     <div
                       className={`
-                        absolute
-                        top-[9px]
-                        left-1/2
-                        w-full
-                        h-[2px]
+                        w-5
+                        h-5
+                        rounded-full
+                        z-10
 
                         ${index === 0
                           ? "bg-[#F26B5B]"
-                          : "bg-[#E5E0D8]"
+                          : "bg-[#D8D2C7]"
                         }
                       `}
                     />
-                  )}
 
-                  <div
-                    className={`
-                      w-5
-                      h-5
-                      rounded-full
-                      z-10
-
-                      ${index === 0
-                        ? "bg-[#F26B5B]"
-                        : "bg-[#D8D2C7]"
-                      }
-                    `}
-                  />
-
-                  <p className="mt-2 text-[11px] font-medium text-[#555]">
-                    {step}
-                  </p>
-                </div>
-              ))}
+                    <p className="mt-2 text-[11px] font-medium text-[#555]">
+                      {step}
+                    </p>
+                  </div>
+                ));
+              })()}
             </div>
           </div>
 
@@ -742,46 +707,16 @@ const filteredRows =
                   <tr>
 
                     <th className="p-3">S No</th>
-
-                    <th className="p-3">
-                      Ecode
-                    </th>
-
-                    <th className="p-3">
-                      Name
-                    </th>
-
-                    <th className="p-3">
-                      Grade
-                    </th>
-
-                    <th className="p-3">
-                      Designation
-                    </th>
-
-                    <th className="p-3">
-                      Employee Home
-                    </th>
-
-                    <th className="p-3">
-                      Input Type
-                    </th>
-
-                    <th className="p-3">
-  {activeModule === "Overtime"
-    ? "OT Hours"
-    : activeModule === "Holiday Payout"
-    ? "Date"
-    : "Amount"}
-</th>
-
-                    <th className="p-3">
-                      Remarks
-                    </th>
-
-                    <th className="p-3 text-center">
-                      Actions
-                    </th>
+                    <th className="p-3">Employee Code</th>
+                    <th className="p-3">Pay Component</th>
+                    <th className="p-3">Payment Frequency</th>
+                    <th className="p-3">Effective From</th>
+                    <th className="p-3">Effective To</th>
+                    <th className="p-3">Amount</th>
+                    <th className="p-3">Reason</th>
+                    <th className="p-3">Remarks</th>
+                    <th className="p-3">Payment for the month</th>
+                    <th className="p-3 text-center">Actions</th>
 
                   </tr>
                 </thead>
@@ -791,7 +726,7 @@ const filteredRows =
                   {filteredRows?.map((row, index) => (
 
                     <tr
-                      key={index}
+                      key={row.id}
                       className="border-t border-[#EFEAE2]"
                     >
 
@@ -801,7 +736,7 @@ const filteredRows =
                         {index + 1}
                       </td>
 
-                      {/* ECODE */}
+                      {/* Employee Code */}
 
                       <td className="p-3">
                         <input
@@ -813,43 +748,18 @@ const filteredRows =
                               e.target.value
                             )
                           }
-                          placeholder="Ecode"
-                          className="
-                            w-full
-                            border
-                            border-[#E7E3DC]
-                            rounded-lg
-                            p-2
-                            text-[12px]
-                          "
+                          placeholder="Employee Code"
+                          className="w-full border border-[#E7E3DC] rounded-lg p-2 text-[12px]"
                         />
                       </td>
 
-                      {/* NAME */}
+                      {/* Pay Component */}
 
-                      <td className="p-3">
-                        <input
-                          value={row.empName || ""}
-                          onChange={(e) =>
-                            handleChange(
-                              row.id,
-                              "empName",
-                              e.target.value
-                            )
-                          }
-                          placeholder="Name"
-                          className="
-                            w-full
-                            border
-                            border-[#E7E3DC]
-                            rounded-lg
-                            p-2
-                            text-[12px]
-                          "
-                        />
+                      <td className="p-3 text-[12px]">
+                        {row.type}
                       </td>
 
-                      {/* GRADE */}
+                      {/* Payment Frequency */}
 
                       <td className="p-3">
                         <input
@@ -861,22 +771,16 @@ const filteredRows =
                               e.target.value
                             )
                           }
-                          placeholder="Grade"
-                          className="
-                            w-full
-                            border
-                            border-[#E7E3DC]
-                            rounded-lg
-                            p-2
-                            text-[12px]
-                          "
+                          placeholder="Payment Frequency"
+                          className="w-full border border-[#E7E3DC] rounded-lg p-2 text-[12px]"
                         />
                       </td>
 
-                      {/* DESIGNATION */}
+                      {/* Effective From */}
 
                       <td className="p-3">
                         <input
+                          type="date"
                           value={row.designation || ""}
                           onChange={(e) =>
                             handleChange(
@@ -885,22 +789,15 @@ const filteredRows =
                               e.target.value
                             )
                           }
-                          placeholder="Designation"
-                          className="
-                            w-full
-                            border
-                            border-[#E7E3DC]
-                            rounded-lg
-                            p-2
-                            text-[12px]
-                          "
+                          className="w-full border border-[#E7E3DC] rounded-lg p-2 text-[12px] min-h-[38px]"
                         />
                       </td>
 
-                      {/* EMPLOYEE HOME */}
+                      {/* Effective To */}
 
                       <td className="p-3">
                         <input
+                          type="date"
                           value={row.employeeHome || ""}
                           onChange={(e) =>
                             handleChange(
@@ -909,86 +806,48 @@ const filteredRows =
                               e.target.value
                             )
                           }
-                          placeholder="Home"
-                          className="
-                            w-full
-                            border
-                            border-[#E7E3DC]
-                            rounded-lg
-                            p-2
-                            text-[12px]
-                          "
+                          className="w-full border border-[#E7E3DC] rounded-lg p-2 text-[12px] min-h-[38px]"
                         />
                       </td>
 
-                      {/* INPUT TYPE */}
-
-                      <td className="p-3 text-[12px]">
-                        {row.type}
-                      </td>
-
-                      {/* DYNAMIC COLUMN */}
+                      {/* Amount */}
 
                       <td className="p-3">
-
-                        {row.type === "Holiday Payout" ? (
-
-                          <input
-                            type="date"
-                            value={row.holidayDate || ""}
-                            onChange={(e) =>
-                              handleChange(
-                                row.id,
-                                "holidayDate",
-                                e.target.value
-                              )
-                            }
-                            className="
-                              w-full
-                              border
-                              border-[#E7E3DC]
-                              rounded-lg
-                              p-2
-                              text-[12px]
-                            "
-                          />
-
-                        ) : (
-
-                          <input
-                            value={
-                              row.type === "Overtime"
-                                ? row.overtimeHours || ""
-                                : row.amount || ""
-                            }
-                            onChange={(e) =>
-                              handleChange(
-                                row.id,
-                                row.type === "Overtime"
-                                  ? "overtimeHours"
-                                  : "amount",
-                                e.target.value
-                              )
-                            }
-                            placeholder={row.type === "Overtime" ? "Hours" : "Amount"}
-                            className="
-                              w-full
-                              border
-                              border-[#E7E3DC]
-                              rounded-lg
-                              p-2
-                              text-[12px]
-                            "
-                          />
-
-                        )}
-
+                        <input
+                          type="text"
+                          value={row.amount || ""}
+                          onChange={(e) =>
+                            handleChange(
+                              row.id,
+                              "amount",
+                              e.target.value
+                            )
+                          }
+                          placeholder="Amount"
+                          className="w-full border border-[#E7E3DC] rounded-lg p-2 text-[12px]"
+                        />
                       </td>
 
-                      {/* REMARKS */}
+                      {/* Reason */}
 
                       <td className="p-3">
+                        <input
+                          value={row.overtimeHours || ""}
+                          onChange={(e) =>
+                            handleChange(
+                              row.id,
+                              "overtimeHours",
+                              e.target.value
+                            )
+                          }
+                          placeholder="Reason"
+                          className="w-full border border-[#E7E3DC] rounded-lg p-2 text-[12px]"
+                        />
+                      </td>
 
+                      {/* Remarks */}
+
+                      <td className="p-3">
                         <input
                           value={row.remarks || ""}
                           onChange={(e) =>
@@ -999,16 +858,25 @@ const filteredRows =
                             )
                           }
                           placeholder="Remarks"
-                          className="
-                            w-full
-                            border
-                            border-[#E7E3DC]
-                            rounded-lg
-                            p-2
-                            text-[12px]
-                          "
+                          className="w-full border border-[#E7E3DC] rounded-lg p-2 text-[12px]"
                         />
+                      </td>
 
+                      {/* Payment for the month */}
+
+                      <td className="p-3">
+                        <input
+                          value={row.holidayDate || ""}
+                          onChange={(e) =>
+                            handleChange(
+                              row.id,
+                              "holidayDate",
+                              e.target.value
+                            )
+                          }
+                          placeholder="Payment for the month"
+                          className="w-full border border-[#E7E3DC] rounded-lg p-2 text-[12px]"
+                        />
                       </td>
 
                       {/* ACTIONS */}

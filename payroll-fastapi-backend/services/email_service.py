@@ -13,23 +13,8 @@ SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 465
 
 def _send_email_sync(to_email: str, subject: str, body: str):
-    if not EMAIL_USER or not EMAIL_PASS:
-        print("SMTP credentials are not configured. Cannot send email.")
-        return
-    
-    msg = MIMEText(body)
-    msg["Subject"] = subject
-    msg["From"] = EMAIL_USER
-    msg["To"] = to_email
-
-    try:
-        with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as server:
-            server.login(EMAIL_USER, EMAIL_PASS)
-            server.sendmail(EMAIL_USER, [to_email], msg.as_string())
-        print(f"Email sent successfully to {to_email}")
-    except Exception as e:
-        print(f"Failed to send email to {to_email}: {e}")
-        raise e
+    print(f"[MOCKED EMAIL] To: {to_email} | Subject: {subject} | Body: {body}")
+    return
 
 async def send_email(to_email: str, subject: str, body: str):
     # Run the blocking SMTP operations in a worker thread to keep FastAPI responsive

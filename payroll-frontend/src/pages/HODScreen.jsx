@@ -9,56 +9,13 @@ import {
   CalendarRange,
   Bell,
 } from "lucide-react";
-const user =
-  JSON.parse(
-    localStorage.getItem(
-      "user"
-    )
-  );
-
-const timeline = [
-  "Maker (Business SPOC)",
-  "HRBP",
-  "Approver (HOD)",
-  "Payroll",
-];
-
-const modules = [
-  {
-    icon: Clock3,
-    label: "Overtime",
-  },
-  {
-    icon: BadgeIndianRupee,
-    label: "Incentive",
-  },
-  {
-    icon: CalendarRange,
-    label: "Holiday Payout",
-  },
-  {
-    icon: BadgeIndianRupee,
-    label: "Joining Bonus",
-  },
-  {
-    icon: BadgeIndianRupee,
-    label: "Referral Bonus",
-  },
-  {
-    icon: BadgeIndianRupee,
-    label: "Retention Bonus",
-  },
-];
-
 export default function HODScreen() {
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const [modules, setModules] = useState([]);
   const [rows, setRows] = useState([]);
-
-  const [activeModule, setActiveModule] =
-    useState("Overtime");
-
-  const [comments, setComments] =
-    useState("");
-
+  const [activeModule, setActiveModule] = useState("");
+  const [comments, setComments] = useState("");
+  const [notifications, setNotifications] = useState([]);
   const navigate = useNavigate();
   const [history, setHistory] = useState([]);
 
@@ -78,9 +35,56 @@ export default function HODScreen() {
       }
       return;
     }
+    fetchConfig();
     fetchPayrollData();
     fetchWorkflowHistory();
+    fetchNotifications();
   }, []);
+
+  const fetchConfig = async () => {
+    try {
+      const response = await API.get("/workflow/config");
+      const allHeads = response.data.earning_heads;
+      const currentUser = response.data.currentUser;
+      
+      let filtered = allHeads;
+      if (currentUser && currentUser.allowed_modules && currentUser.allowed_modules.length > 0) {
+        if (!currentUser.allowed_modules.includes("*")) {
+          filtered = allHeads.filter(head => currentUser.allowed_modules.includes(head.name));
+        }
+      }
+      
+      setModules(filtered);
+      if (filtered.length > 0) {
+        setActiveModule(filtered[0].name);
+      }
+    } catch (error) {
+      console.log("Failed to fetch configuration:", error);
+    }
+  };
+
+  const fetchNotifications = async () => {
+    try {
+      const response = await API.get("/notifications");
+      setNotifications(response.data);
+    } catch (error) {
+      console.log("Failed to fetch notifications:", error);
+    }
+  };
+
+  const handleMarkNotificationsRead = async () => {
+    try {
+      await API.post("/notifications/mark-read");
+      fetchNotifications();
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("user");
+    navigate("/");
+  };
 
   const fetchWorkflowHistory = async () => {
     try {
@@ -164,16 +168,15 @@ export default function HODScreen() {
           </span>
         </div>
 
-        <div className="flex flex-col gap-2 px-3">
-
-          {modules.map((item) => {
-            const Icon = item.icon;
+        <div className="flex flex-col gap-2 px-3 overflow-y-auto flex-1 max-h-[calc(100vh-100px)]">
+          {modules.map((item, index) => {
+            let Icon = BadgeIndianRupee;
 
             return (
               <div
-                key={item.label}
+                key={index}
                 onClick={() =>
-                  setActiveModule(item.label)
+                  setActiveModule(item.name)
                 }
                 className={`
                   flex
@@ -186,13 +189,13 @@ export default function HODScreen() {
                   min-w-[200px]
 
                   ${
-                    activeModule === item.label
+                    activeModule === item.name
                       ? "bg-[#F26B5B] text-white"
                       : "text-[#B8B8B8] hover:bg-[#1E1E1E] hover:text-white"
                   }
                 `}
               >
-                <Icon size={18} />
+                <Icon size={18} className="flex-shrink-0" />
 
                 <span
                   className="
@@ -201,7 +204,7 @@ export default function HODScreen() {
                     text-[13px]
                   "
                 >
-                  {item.label}
+                  {item.name}
                 </span>
               </div>
             );
@@ -230,19 +233,14 @@ export default function HODScreen() {
   </div>
 
   <div className="flex items-center gap-5">
-
-    {/* NOTIFICATIONS */}
-
-    <div className="relative group">
-
+    <div className="relative group" onMouseEnter={handleMarkNotificationsRead}>
       <div className="relative cursor-pointer">
-
         <Bell size={17} />
-
-        <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#F26B5B] text-white text-[9px] flex items-center justify-center">
-          3
-        </div>
-
+        {notifications.filter(n => !n.isRead).length > 0 && (
+          <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#F26B5B] text-white text-[9px] flex items-center justify-center">
+            {notifications.filter(n => !n.isRead).length}
+          </div>
+        )}
       </div>
 
       <div
@@ -266,62 +264,52 @@ export default function HODScreen() {
           overflow-hidden
         "
       >
-
         <div className="px-4 py-3 border-b border-[#EFEAE2]">
-
           <h3 className="text-[13px] font-semibold">
             Notifications
           </h3>
-
         </div>
 
         <div className="max-h-[320px] overflow-y-auto">
-
-          {[
-            "2 approval requests pending",
-            "Holiday payout submitted",
-            "Incentive payout awaiting decision",
-          ].map((item, index) => (
-            <div
-              key={index}
-              className="
-                px-4
-                py-3
-                border-b
-                border-[#F4F1EC]
-                hover:bg-[#FAF7F2]
-                cursor-pointer
-              "
-            >
-
-              <p className="text-[12px] text-[#333]">
-                {item}
-              </p>
-
-              <p className="text-[10px] text-[#999] mt-1">
-                5 mins ago
-              </p>
-
-            </div>
-          ))}
+          {notifications.length > 0 ? (
+            notifications.map((item, index) => (
+              <div
+                key={index}
+                className={`
+                  px-4
+                  py-3
+                  border-b
+                  border-[#F4F1EC]
+                  hover:bg-[#FAF7F2]
+                  cursor-pointer
+                  ${!item.isRead ? "bg-[#FFF9F2]" : ""}
+                `}
+              >
+                <p className="text-[12px] text-[#333]">
+                  {item.text}
+                </p>
+                <p className="text-[10px] text-[#999] mt-1">
+                  {item.time}
+                </p>
+              </div>
+            ))
+          ) : (
+            <p className="text-[12px] text-[#777] p-4 text-center">
+              No notifications
+            </p>
+          )}
         </div>
       </div>
     </div>
 
-    {/* USER MENU */}
-
     <div className="relative group">
-
       <div className="flex items-center gap-3 cursor-pointer">
-
         <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center text-[11px]">
-          Approver (HOD)
+          {user?.name ? user.name.split(" ").map(n => n[0]).join("").toUpperCase() : "AP"}
         </div>
-
         <div className="text-[12px] font-medium">
-          User
+          {user?.name || "Approver"}
         </div>
-
       </div>
 
       <div
@@ -345,46 +333,36 @@ export default function HODScreen() {
           overflow-hidden
         "
       >
-
         <div className="px-4 py-4 border-b border-[#EFEAE2]">
-
           <p className="text-[13px] font-semibold">
             {user?.name}
           </p>
-
           <p className="text-[11px] text-[#888] mt-1">
             Approver (HOD)
           </p>
-
         </div>
-
-        {[
-          "Account Settings",
-          "Profile",
-          "Notifications",
-          "Help & Support",
-          "Logout",
-        ].map((item, index) => (
-          <div
-            key={index}
-            className="
-              px-4
-              py-3
-              text-[12px]
-              hover:bg-[#FAF7F2]
-              cursor-pointer
-              border-b
-              border-[#F5F1EB]
-              last:border-none
-            "
+        <div className="flex flex-col text-[12px] bg-white text-left">
+          <div 
+            onClick={() => alert(`Profile Details:\n\nName: ${user?.name || "User"}\nEmail: ${user?.email || "N/A"}\nEmployee ID: ${user?.employee_id || "N/A"}\nRole: ${user?.role || "N/A"}`)}
+            className="px-4 py-3 hover:bg-[#FAF7F2] cursor-pointer border-b border-[#F5F1EB]"
           >
-            {item}
+            Profile
           </div>
-        ))}
-
+          <div 
+            onClick={() => alert("For help and support, please contact the IT Payroll Team at: it.team@1mg.com")}
+            className="px-4 py-3 hover:bg-[#FAF7F2] cursor-pointer border-b border-[#F5F1EB]"
+          >
+            Help & Support
+          </div>
+          <div 
+            onClick={handleLogout}
+            className="px-4 py-3 hover:bg-[#FAF7F2] cursor-pointer text-red-600 font-medium"
+          >
+            Logout
+          </div>
+        </div>
       </div>
     </div>
-
   </div>
 </div>
 
@@ -475,89 +453,40 @@ export default function HODScreen() {
           </div>
           
 
+{/* Approver (HOD) Flags removed */}
+{/*
 <div className="bg-white border border-[#E7E3DC] rounded-2xl p-5 mb-5">
-
-  <h3 className="text-[13px] font-semibold mb-3">
-    Approver (HOD) Flags
-  </h3>
-
-  {rows[0]?.flaggedColumns?.length ? (
-
-    <div className="flex gap-2 flex-wrap">
-
-      {rows[0].flaggedColumns.map(
-        (column, index) => (
-
-          <div
-            key={index}
-            className="
-              px-3
-              py-1
-              rounded-lg
-              bg-[#F26B5B]
-              text-white
-              text-[11px]
-            "
-          >
-            {column}
-          </div>
-
-        )
-      )}
-
-    </div>
-
-  ) : (
-
-    <p className="text-[12px] text-[#777]">
-      No flagged columns
-    </p>
-
-  )}
-
-</div>
-<div className="bg-white border border-[#E7E3DC] rounded-2xl p-5 mb-5">
-
   <h3 className="text-[13px] font-semibold mb-3">
     Workflow History
   </h3>
-
   {history?.length ? (
     <div className="max-h-[150px] overflow-y-auto pr-2">
       {history.map(
         (item, index) => (
-
           <div
             key={index}
             className="border-b border-[#EFEAE2] py-2 last:border-none"
           >
-
             <p className="text-[12px] font-medium">
               {item.action}
             </p>
-
             <p className="text-[11px] text-[#777]">
               {item.user}
             </p>
-
             <p className="text-[10px] text-[#999]">
               {item.timestamp}
             </p>
-
           </div>
-
         )
       )}
     </div>
   ) : (
-
     <p className="text-[12px] text-[#777]">
       No workflow history
     </p>
-
   )}
-
 </div>
+*/}
 
           {/* TABLE */}
 
@@ -568,27 +497,18 @@ export default function HODScreen() {
               <table className="w-full">
 
                 <thead className="bg-[#FAF7F2] sticky top-0">
-
                   <tr>
-
-                    <th>S No</th>
-<th>Ecode</th>
-<th>Name</th>
-<th>Grade</th>
-<th>Designation</th>
-<th>Employee Home</th>
-<th>Input Type</th>
-<th>
-  {activeModule === "Overtime"
-    ? "OT Hours"
-    : activeModule === "Holiday Payout"
-    ? "Date"
-    : "Amount"}
-</th>
-<th>Remarks</th>
-
+                    <th className="p-3 text-left">S No</th>
+                    <th className="p-3 text-left">Employee Code</th>
+                    <th className="p-3 text-left">Pay Component</th>
+                    <th className="p-3 text-left">Payment Frequency</th>
+                    <th className="p-3 text-left">Effective From</th>
+                    <th className="p-3 text-left">Effective To</th>
+                    <th className="p-3 text-left">Amount</th>
+                    <th className="p-3 text-left">Reason</th>
+                    <th className="p-3 text-left">Remarks</th>
+                    <th className="p-3 text-left">Payment for the month</th>
                   </tr>
-
                 </thead>
 
                 <tbody>
@@ -609,7 +529,7 @@ export default function HODScreen() {
       </td>
 
       <td className="p-3 text-[12px]">
-        {row.empName}
+        {row.type}
       </td>
 
       <td className="p-3 text-[12px]">
@@ -625,37 +545,26 @@ export default function HODScreen() {
       </td>
 
       <td className="p-3 text-[12px]">
-        {row.type}
+        {row.amount}
       </td>
 
       <td className="p-3 text-[12px]">
-
-        {activeModule === "Overtime"
-          ? row.overtimeHours
-          : activeModule === "Holiday Payout"
-          ? row.holidayDate
-          : row.amount}
-
+        {row.overtimeHours}
       </td>
 
       <td className="p-3">
-
         <input
           value={row.remarks || ""}
           onChange={(e) => {
             const updated = rows.map(r => r.id === row.id ? { ...r, remarks: e.target.value } : r);
             setRows(updated);
           }}
-          className="
-            w-full
-            border
-            border-[#E7E3DC]
-            rounded-lg
-            p-2
-            text-[12px]
-          "
+          className="w-full border border-[#E7E3DC] rounded-lg p-2 text-[12px]"
         />
+      </td>
 
+      <td className="p-3 text-[12px]">
+        {row.holidayDate}
       </td>
 
     </tr>

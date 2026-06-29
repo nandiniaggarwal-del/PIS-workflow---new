@@ -29,6 +29,8 @@ class WorkflowQueue(Base):
     hodComments = Column(Text, nullable=True)
     flaggedColumns = Column(JSON, nullable=True)  # Stores list of strings
     history = Column(JSON, nullable=True)         # Stores list of logs dict
+    initiatorEmail = Column(String(255), nullable=True)
+    initiatorEmpCode = Column(String(100), nullable=True)
 
 class AuditHistory(Base):
     __tablename__ = "audit_history"
@@ -38,3 +40,12 @@ class AuditHistory(Base):
     user = Column(String(255), nullable=False)
     remarks = Column(Text, nullable=True)
     timestamp = Column(String(100), nullable=False)
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    userEmail = Column(String(255), nullable=False, index=True)
+    text = Column(String(500), nullable=False)
+    timestamp = Column(String(100), nullable=False)
+    isRead = Column(Integer, default=0) # 0 = unread, 1 = read
