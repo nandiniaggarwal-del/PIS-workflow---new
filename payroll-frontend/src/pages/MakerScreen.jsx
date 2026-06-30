@@ -163,50 +163,52 @@ const downloadTemplate = () => {
   link.click();
   document.body.removeChild(link);
 };
+  const normalizeDate = (dateVal) => {
+    if (!dateVal) return "";
+    if (typeof dateVal === 'number') {
+      const date = new Date((dateVal - 25569) * 86400 * 1000);
+      if (!isNaN(date.getTime())) {
+        const yyyy = date.getFullYear();
+        const mm = String(date.getMonth() + 1).padStart(2, '0');
+        const dd = String(date.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+      }
+    }
+    const str = dateVal.toString().trim();
+    if (!str) return "";
+    const d = new Date(str);
+    if (!isNaN(d.getTime())) {
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    }
+    return str;
+  };
+
   const uploadTemplate = () => {
-
     if (!selectedFile) {
-
       alert("Select a file");
-
       return;
     }
 
-    const reader =
-      new FileReader();
-
+    const reader = new FileReader();
     reader.onload = (e) => {
-
-      const data =
-        new Uint8Array(
-          e.target.result
-        );
-
-      const workbook =
-        XLSX.read(data, {
-          type: "array",
-        });
-
-      const sheetName =
-        workbook.SheetNames[0];
-
-      const worksheet =
-        workbook.Sheets[sheetName];
-
-      const jsonData =
-        XLSX.utils.sheet_to_json(
-          worksheet
-        );
-
-      const activeModuleConfig = modules.find(m => m.name === activeModule);
-      const inputType = activeModuleConfig ? activeModuleConfig.input_type : "amount";
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: "array" });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
       const formattedRows = jsonData.map((row, index) => {
         const empCode = row.ecode || row["Employee Code"] || "";
         const empName = row.name || row["Employee Name"] || "";
         const grade = row.grade || row["Grade"] || row["Payment Frequency"] || "";
-        const designation = row.designation || row["Designation"] || row["Effective From"] || "";
-        const employeeHome = row.employeeHome || row["Employee Home"] || row["Effective To"] || "";
+        
+        // Normalize date fields from template columns so they match calendar format (YYYY-MM-DD)
+        const designation = normalizeDate(row.designation || row["Designation"] || row["Effective From"] || "");
+        const employeeHome = normalizeDate(row.employeeHome || row["Employee Home"] || row["Effective To"] || "");
+        
         const amount = row.amount !== undefined ? row.amount.toString() : (row["Amount"] !== undefined ? row["Amount"].toString() : "");
         const overtimeHours = row.overtimeHours || row["Reason"] || "";
         const remarks = row.remarks || row["Remarks"] || "";
@@ -221,6 +223,7 @@ const downloadTemplate = () => {
           designation,
           employeeHome,
           type: activeModule,
+          module: activeModule,
           amount,
           overtimeHours,
           remarks,
@@ -228,18 +231,13 @@ const downloadTemplate = () => {
         };
       });
 
-      const taggedRows =
-  formattedRows.map(row => ({
-    ...row,
-    module: activeModule,
-    type: activeModule,
-  }));
+      // Clear any existing draft rows in state for the active module, then append the newly uploaded rows
+      setRows(prevRows => [
+        ...prevRows.filter(r => r.module !== activeModule && r.type !== activeModule),
+        ...formattedRows
+      ]);
 
-setRows(taggedRows);
-
-      alert(
-        "Template Uploaded Successfully"
-      );
+      alert("Template Uploaded Successfully");
     };
 
     reader.readAsArrayBuffer(
@@ -600,7 +598,7 @@ const filteredRows =
 
                 <input
                   type="file"
-                  accept=".xlsx,.xls"
+                  accept=".xlsx,.xls,.csv"
                   className="hidden"
                   onChange={(e) =>
                     setSelectedFile(

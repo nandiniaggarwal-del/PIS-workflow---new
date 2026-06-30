@@ -134,6 +134,10 @@ export default function HRBPScreen() {
       row.module === activeModule
   );
 
+  const totalAmount = filteredRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+  const totalRecords = filteredRows.length;
+  const averagePayout = totalRecords > 0 ? Math.round(totalAmount / totalRecords) : 0;
+
   return (
     <div className="flex h-screen bg-[#F5F5F3] overflow-hidden">
 
@@ -430,6 +434,33 @@ export default function HRBPScreen() {
             <p className="text-[12px] text-[#777]">
               Review submissions from Maker (Business SPOC)
             </p>
+          </div>
+
+          {/* SUMMARY WIDGETS */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+            {/* Total Cost */}
+            <div className="bg-white border border-[#E7E3DC] rounded-2xl p-5">
+              <p className="text-[11px] text-[#777] font-semibold font-sans">Total Cost</p>
+              <h2 className="text-[22px] font-bold mt-2 text-neutral-800 font-sans">
+                ₹ {totalAmount.toLocaleString()}
+              </h2>
+            </div>
+            
+            {/* Total Records */}
+            <div className="bg-white border border-[#E7E3DC] rounded-2xl p-5">
+              <p className="text-[11px] text-[#777] font-semibold font-sans">Total Records</p>
+              <h2 className="text-[22px] font-bold mt-2 text-neutral-800 font-sans">
+                {totalRecords} row{totalRecords !== 1 ? "s" : ""}
+              </h2>
+            </div>
+            
+            {/* Average Value */}
+            <div className="bg-white border border-[#E7E3DC] rounded-2xl p-5">
+              <p className="text-[11px] text-[#777] font-semibold font-sans">Average Row Cost</p>
+              <h2 className="text-[22px] font-bold mt-2 text-neutral-800 font-sans">
+                ₹ {averagePayout.toLocaleString()}
+              </h2>
+            </div>
           </div>
 
           {/* TIMELINE */}

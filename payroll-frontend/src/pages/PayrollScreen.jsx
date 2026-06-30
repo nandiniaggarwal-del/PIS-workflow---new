@@ -401,18 +401,10 @@ export default function PayrollScreen() {
                   <h2 className="text-[24px] font-semibold mt-2 text-neutral-800">{filteredRows.length}</h2>
                 </div>
 
-                {/* Earning Head Selector Dropdown */}
+                {/* Active Earning Head */}
                 <div className="bg-white border border-[#E7E3DC] rounded-2xl p-5 flex flex-col justify-between">
                   <p className="text-[11px] text-[#777] font-semibold">Active Earning Head</p>
-                  <select
-                    value={activeModule}
-                    onChange={(e) => setActiveModule(e.target.value)}
-                    className="w-full mt-2 border border-[#E7E3DC] p-2.5 rounded-xl text-[12px] bg-[#FAF7F2] outline-none focus:border-[#F26B5B] transition-all font-semibold text-neutral-800 cursor-pointer"
-                  >
-                    {modules.map(mod => (
-                      <option key={mod.name} value={mod.name}>{mod.name}</option>
-                    ))}
-                  </select>
+                  <h2 className="text-[15px] font-semibold mt-2 font-mono text-neutral-800 tracking-wide">{activeModule}</h2>
                 </div>
 
                 {/* Action Buttons Panel */}
