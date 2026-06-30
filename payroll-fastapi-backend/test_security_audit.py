@@ -3,7 +3,7 @@ import json
 import os
 import sys
 
-BASE_URL = "http://localhost:5001/api"
+BASE_URL = "http://localhost:8000/api"
 def get_auth_token(email: str) -> str:
     res = requests.post(f"{BASE_URL}/auth/sso-login", json={"email": email})
     if res.status_code != 200:

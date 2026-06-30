@@ -3,12 +3,17 @@ import { useNavigate } from "react-router-dom";
 import API from "../services/api";
 
 import {
-  Clock3,
-  Plane,
   BadgeIndianRupee,
-  CalendarRange,
   Bell,
   Download,
+  CheckCircle2,
+  Clock,
+  Archive,
+  ChevronRight,
+  CalendarDays,
+  LogOut,
+  Loader2,
+  X,
 } from "lucide-react";
 
 export default function PayrollScreen() {
@@ -17,6 +22,12 @@ export default function PayrollScreen() {
   const [rows, setRows] = useState([]);
   const [activeModule, setActiveModule] = useState("");
   const [notifications, setNotifications] = useState([]);
+  const [activeTab, setActiveTab] = useState("queue"); // queue | closed | inprocess
+  const [closedData, setClosedData] = useState({ months: [] });
+  const [inProcessData, setInProcessData] = useState({ modules: [] });
+  const [selectedClosedMonth, setSelectedClosedMonth] = useState(null);
+  const [expandedClosedModule, setExpandedClosedModule] = useState(null);
+  const [closingModule, setClosingModule] = useState(null); // loading state for close button
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -38,6 +49,8 @@ export default function PayrollScreen() {
     fetchConfig();
     fetchPayrollData();
     fetchNotifications();
+    fetchClosedData();
+    fetchInProcessData();
   }, []);
 
   const fetchConfig = async () => {
@@ -59,6 +72,36 @@ export default function PayrollScreen() {
       }
     } catch (error) {
       console.log("Failed to fetch configuration:", error);
+    }
+  };
+
+  const fetchPayrollData = async () => {
+    try {
+      const response = await API.get("/workflow/payroll");
+      setRows(response.data);
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  const fetchClosedData = async () => {
+    try {
+      const response = await API.get("/workflow/closed");
+      setClosedData(response.data);
+      if (response.data.months.length > 0 && !selectedClosedMonth) {
+        setSelectedClosedMonth(response.data.months[0].monthKey);
+      }
+    } catch (error) {
+      console.log("Failed to fetch closed data:", error);
+    }
+  };
+
+  const fetchInProcessData = async () => {
+    try {
+      const response = await API.get("/workflow/in-process");
+      setInProcessData(response.data);
+    } catch (error) {
+      console.log("Failed to fetch in-process data:", error);
     }
   };
 
@@ -85,20 +128,25 @@ export default function PayrollScreen() {
     navigate("/");
   };
 
-  const fetchPayrollData = async () => {
+  const handleCloseModule = async (moduleName) => {
+    if (!confirm(`Are you sure you want to finalize and close all "${moduleName}" sheets? This action cannot be undone.`)) {
+      return;
+    }
+    setClosingModule(moduleName);
     try {
-      const response = await API.get("/workflow/payroll");
-      setRows(response.data);
+      await API.post("/workflow/payroll/close", { module: moduleName });
+      // Refresh all data
+      await Promise.all([fetchPayrollData(), fetchClosedData(), fetchInProcessData()]);
     } catch (error) {
-      console.log(error);
+      alert(error?.response?.data?.detail || "Failed to close sheets");
+    } finally {
+      setClosingModule(null);
     }
   };
 
   const filteredRows = rows.filter(row => row.module === activeModule);
 
-
-
-  const exportExcel = () => {
+  const exportExcel = (rowsToExport, filename) => {
     const csvRows = [];
     csvRows.push(
       [
@@ -114,7 +162,7 @@ export default function PayrollScreen() {
       ].join(",")
     );
 
-    filteredRows.forEach((row) => {
+    (rowsToExport || filteredRows).forEach((row) => {
       csvRows.push(
         [
           `"${row.empCode || ""}"`,
@@ -134,15 +182,35 @@ export default function PayrollScreen() {
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${activeModule}.csv`;
+    link.download = filename || `${activeModule}.csv`;
     link.click();
   };
+
+  // Get progress bar color based on percentage
+  const getProgressColor = (progress) => {
+    if (progress <= 25) return "#EF4444"; // red
+    if (progress <= 50) return "#F59E0B"; // amber
+    if (progress <= 75) return "#3B82F6"; // blue
+    return "#22C55E"; // green
+  };
+
+  const getProgressBg = (progress) => {
+    if (progress <= 25) return "#FEE2E2";
+    if (progress <= 50) return "#FEF3C7";
+    if (progress <= 75) return "#DBEAFE";
+    return "#DCFCE7";
+  };
+
+  const topTabs = [
+    { key: "queue", label: "Payroll Queue", icon: BadgeIndianRupee, count: rows.length },
+    { key: "closed", label: "Closed / Processed", icon: Archive, count: closedData.months.reduce((sum, m) => sum + m.modules.reduce((s, mod) => s + mod.rowCount, 0), 0) },
+    { key: "inprocess", label: "In Process", icon: Clock, count: inProcessData.modules.reduce((sum, m) => sum + m.totalRows, 0) },
+  ];
 
   return (
     <div className="flex h-screen bg-[#F5F5F3] overflow-hidden">
 
       {/* SIDEBAR */}
-
       <div
         className="
           group
@@ -157,15 +225,12 @@ export default function PayrollScreen() {
           overflow-hidden
         "
       >
-
         <div className="px-5 mb-8 flex items-center min-w-[220px]">
-
           <img
             src="https://upload.wikimedia.org/wikipedia/commons/7/75/1mg_Logo.png"
             alt="logo"
             className="w-8 brightness-0 invert"
           />
-
           <span
             className="
               ml-4
@@ -178,19 +243,18 @@ export default function PayrollScreen() {
           >
             Payroll
           </span>
-
         </div>
 
         <div className="flex flex-col gap-2 px-3 overflow-y-auto flex-1 max-h-[calc(100vh-100px)]">
           {modules.map((item, index) => {
             let Icon = BadgeIndianRupee;
-
             return (
               <div
                 key={index}
-                onClick={() =>
-                  setActiveModule(item.name)
-                }
+                onClick={() => {
+                  setActiveModule(item.name);
+                  setActiveTab("queue");
+                }}
                 className={`
                   flex
                   items-center
@@ -200,16 +264,14 @@ export default function PayrollScreen() {
                   rounded-xl
                   cursor-pointer
                   min-w-[200px]
-
                   ${
-                    activeModule === item.name
+                    activeModule === item.name && activeTab === "queue"
                       ? "bg-[#F26B5B] text-white"
                       : "text-[#B8B8B8] hover:bg-[#1E1E1E] hover:text-white"
                   }
                 `}
               >
                 <Icon size={18} className="flex-shrink-0" />
-
                 <span
                   className="
                     opacity-0
@@ -223,138 +285,62 @@ export default function PayrollScreen() {
             );
           })}
         </div>
-
       </div>
 
       {/* MAIN */}
-
       <div className="flex-1 flex flex-col">
 
         {/* TOPBAR */}
-
         <div className="h-[58px] bg-white border-b border-[#E7E3DC] px-6 flex items-center justify-between">
-
           <div>
-
             <h1 className="text-[15px] font-semibold">
-              Payroll Final Export
+              Payroll Dashboard
             </h1>
-
             <p className="text-[11px] text-[#777]">
-              Final Processing Stage
+              Final Processing, Closure & Reports
             </p>
-
           </div>
 
           <div className="flex items-center gap-5">
+            {/* Notifications */}
             <div className="relative group" onMouseEnter={handleMarkNotificationsRead}>
               <div className="relative cursor-pointer">
-                <Bell size={17} />
+                <Bell size={18} className="text-[#777]" />
                 {notifications.filter(n => !n.isRead).length > 0 && (
-                  <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#F26B5B] text-white text-[9px] flex items-center justify-center">
+                  <span className="absolute -top-1 -right-1 bg-[#F26B5B] text-white text-[8px] w-4 h-4 flex items-center justify-center rounded-full">
                     {notifications.filter(n => !n.isRead).length}
-                  </div>
+                  </span>
                 )}
               </div>
-
-              <div
-                className="
-                  absolute
-                  right-0
-                  top-[35px]
-                  w-[300px]
-                  bg-white
-                  border
-                  border-[#E7E3DC]
-                  rounded-2xl
-                  shadow-xl
-                  opacity-0
-                  invisible
-                  group-hover:opacity-100
-                  group-hover:visible
-                  transition-all
-                  duration-200
-                  z-50
-                  overflow-hidden
-                "
-              >
-                <div className="px-4 py-3 border-b border-[#EFEAE2]">
-                  <h3 className="text-[13px] font-semibold">
-                    Notifications
-                  </h3>
-                </div>
-
-                <div className="max-h-[320px] overflow-y-auto">
-                  {notifications.length > 0 ? (
-                    notifications.map((item, index) => (
-                      <div
-                        key={index}
-                        className={`
-                          px-4
-                          py-3
-                          border-b
-                          border-[#F4F1EC]
-                          hover:bg-[#FAF7F2]
-                          cursor-pointer
-                          ${!item.isRead ? "bg-[#FFF9F2]" : ""}
-                        `}
-                      >
-                        <p className="text-[12px] text-[#333]">
-                          {item.text}
-                        </p>
-                        <p className="text-[10px] text-[#999] mt-1">
-                          {item.time}
-                        </p>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-[12px] text-[#777] p-4 text-center">
-                      No notifications
-                    </p>
-                  )}
-                </div>
+              <div className="absolute right-0 top-[32px] w-[300px] bg-white border border-[#E7E3DC] rounded-2xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 max-h-[400px] overflow-y-auto">
+                <div className="p-3 border-b border-[#EFEAE2] text-[12px] font-semibold text-[#777]">Notifications</div>
+                {notifications.length > 0 ? (
+                  notifications.slice(0, 10).map((item, idx) => (
+                    <div key={idx} className={`px-4 py-3 border-b border-[#F5F1EB] ${item.isRead ? "opacity-60" : ""}`}>
+                      <p className="text-[12px] text-[#333]">{item.text}</p>
+                      <p className="text-[10px] text-[#999] mt-1">{item.time}</p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-[12px] text-[#777] p-4 text-center">No notifications</p>
+                )}
               </div>
             </div>
 
+            {/* Profile */}
             <div className="relative group">
               <div className="flex items-center gap-3 cursor-pointer">
                 <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center text-[11px]">
                   {user?.name ? user.name.split(" ").map(n => n[0]).join("").toUpperCase() : "PY"}
                 </div>
-
                 <div className="text-[12px] font-medium">
                   {user?.name || "Payroll User"}
                 </div>
               </div>
-
-              <div
-                className="
-                  absolute
-                  right-0
-                  top-[42px]
-                  w-[220px]
-                  bg-white
-                  border
-                  border-[#E7E3DC]
-                  rounded-2xl
-                  shadow-xl
-                  opacity-0
-                  invisible
-                  group-hover:opacity-100
-                  group-hover:visible
-                  transition-all
-                  duration-200
-                  z-50
-                  overflow-hidden
-                "
-              >
+              <div className="absolute right-0 top-[42px] w-[220px] bg-white border border-[#E7E3DC] rounded-2xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 overflow-hidden">
                 <div className="px-4 py-4 border-b border-[#EFEAE2]">
-                  <p className="text-[13px] font-semibold">
-                    {user?.name}
-                  </p>
-                  <p className="text-[11px] text-[#888] mt-1">
-                    Payroll Admin
-                  </p>
+                  <p className="text-[13px] font-semibold">{user?.name}</p>
+                  <p className="text-[11px] text-[#888] mt-1">Payroll Admin</p>
                 </div>
                 <div className="flex flex-col text-[12px] bg-white text-left">
                   <div 
@@ -362,12 +348,6 @@ export default function PayrollScreen() {
                     className="px-4 py-3 hover:bg-[#FAF7F2] cursor-pointer border-b border-[#F5F1EB]"
                   >
                     Profile
-                  </div>
-                  <div 
-                    onClick={() => alert("For help and support, please contact the IT Payroll Team at: it.team@1mg.com")}
-                    className="px-4 py-3 hover:bg-[#FAF7F2] cursor-pointer border-b border-[#F5F1EB]"
-                  >
-                    Help & Support
                   </div>
                   <div 
                     onClick={handleLogout}
@@ -379,147 +359,352 @@ export default function PayrollScreen() {
               </div>
             </div>
           </div>
-
         </div>
 
-        {/* PAGE */}
+        {/* SUB-TAB NAVIGATION */}
+        <div className="bg-white border-b border-[#E7E3DC] px-6 flex gap-1">
+          {topTabs.map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`
+                flex items-center gap-2 px-4 py-3 text-[12px] font-semibold border-b-2 transition-all
+                ${activeTab === tab.key
+                  ? "border-[#F26B5B] text-[#F26B5B]"
+                  : "border-transparent text-[#888] hover:text-[#333] hover:border-[#ddd]"
+                }
+              `}
+            >
+              <tab.icon size={15} />
+              {tab.label}
+              {tab.count > 0 && (
+                <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
+                  activeTab === tab.key ? "bg-[#F26B5B] text-white" : "bg-neutral-100 text-[#888]"
+                }`}>
+                  {tab.count}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
 
+        {/* PAGE CONTENT */}
         <div className="flex-1 overflow-y-auto p-5">
 
-          <div className="grid grid-cols-3 gap-4 mb-5">
-            <div className="bg-white border border-[#E7E3DC] rounded-2xl p-5">
-              <p className="text-[11px] text-[#777]">
-                Total Records
-              </p>
-              <h2 className="text-[24px] font-semibold mt-2">
-                {filteredRows.length}
-              </h2>
+          {/* ========== TAB 1: PAYROLL QUEUE ========== */}
+          {activeTab === "queue" && (
+            <>
+              <div className="grid grid-cols-3 gap-4 mb-5">
+                <div className="bg-white border border-[#E7E3DC] rounded-2xl p-5">
+                  <p className="text-[11px] text-[#777]">Total Records</p>
+                  <h2 className="text-[24px] font-semibold mt-2">{filteredRows.length}</h2>
+                </div>
+                <div className="bg-white border border-[#E7E3DC] rounded-2xl p-5">
+                  <p className="text-[11px] text-[#777]">Module</p>
+                  <h2 className="text-[16px] font-semibold mt-2 font-mono">{activeModule}</h2>
+                </div>
+                <div className="bg-white border border-[#E7E3DC] rounded-2xl p-5">
+                  <p className="text-[11px] text-[#777]">Status</p>
+                  <h2 className="text-[24px] font-semibold mt-2 text-amber-600">Pending Closure</h2>
+                </div>
+              </div>
+
+              <div className="bg-white border border-[#E7E3DC] rounded-2xl overflow-hidden mb-5">
+                <table className="w-full">
+                  <thead className="bg-[#FAF7F2]">
+                    <tr>
+                      <th className="p-3 text-left text-[11px] font-semibold text-[#777]">S No</th>
+                      <th className="p-3 text-left text-[11px] font-semibold text-[#777]">Employee Code</th>
+                      <th className="p-3 text-left text-[11px] font-semibold text-[#777]">Pay Component</th>
+                      <th className="p-3 text-left text-[11px] font-semibold text-[#777]">Payment Frequency</th>
+                      <th className="p-3 text-left text-[11px] font-semibold text-[#777]">Effective From</th>
+                      <th className="p-3 text-left text-[11px] font-semibold text-[#777]">Effective To</th>
+                      <th className="p-3 text-left text-[11px] font-semibold text-[#777]">Amount</th>
+                      <th className="p-3 text-left text-[11px] font-semibold text-[#777]">Reason</th>
+                      <th className="p-3 text-left text-[11px] font-semibold text-[#777]">Remarks</th>
+                      <th className="p-3 text-left text-[11px] font-semibold text-[#777]">Payment Month</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredRows.map((row, index) => (
+                      <tr key={index} className="border-t border-[#EFEAE2] hover:bg-[#FAFAF8]">
+                        <td className="p-3 text-[12px]">{index + 1}</td>
+                        <td className="p-3 text-[12px] font-mono">{row.empCode}</td>
+                        <td className="p-3 text-[12px]">{row.type}</td>
+                        <td className="p-3 text-[12px]">{row.grade}</td>
+                        <td className="p-3 text-[12px]">{row.designation}</td>
+                        <td className="p-3 text-[12px]">{row.employeeHome}</td>
+                        <td className="p-3 text-[12px] font-semibold">{row.amount}</td>
+                        <td className="p-3 text-[12px]">{row.overtimeHours}</td>
+                        <td className="p-3 text-[12px]">{row.remarks}</td>
+                        <td className="p-3 text-[12px]">{row.holidayDate}</td>
+                      </tr>
+                    ))}
+                    {filteredRows.length === 0 && (
+                      <tr>
+                        <td colSpan="10" className="p-8 text-center text-[13px] text-[#999]">
+                          No pending sheets for this module
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {filteredRows.length > 0 && (
+                <div className="flex justify-center gap-4">
+                  <button
+                    onClick={() => exportExcel()}
+                    className="flex items-center gap-3 px-8 py-4 bg-black text-white rounded-2xl text-[13px] font-medium hover:bg-neutral-800 transition-colors"
+                  >
+                    <Download size={18} />
+                    Export CSV
+                  </button>
+                  <button
+                    onClick={() => handleCloseModule(activeModule)}
+                    disabled={closingModule === activeModule}
+                    className="flex items-center gap-3 px-8 py-4 bg-emerald-600 text-white rounded-2xl text-[13px] font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                  >
+                    {closingModule === activeModule ? (
+                      <Loader2 size={18} className="animate-spin" />
+                    ) : (
+                      <CheckCircle2 size={18} />
+                    )}
+                    Finalize & Close
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ========== TAB 2: CLOSED / PROCESSED ========== */}
+          {activeTab === "closed" && (
+            <div className="flex gap-5 h-[calc(100vh-170px)]">
+              {/* Month Sidebar */}
+              <div className="w-[220px] flex-shrink-0 bg-white border border-[#E7E3DC] rounded-2xl overflow-hidden flex flex-col">
+                <div className="p-4 border-b border-[#EFEAE2]">
+                  <h3 className="text-[13px] font-semibold flex items-center gap-2">
+                    <CalendarDays size={15} className="text-[#F26B5B]" />
+                    Processed Months
+                  </h3>
+                </div>
+                <div className="flex-1 overflow-y-auto">
+                  {closedData.months.length === 0 ? (
+                    <p className="text-[12px] text-[#999] p-4 text-center italic">No closed sheets yet</p>
+                  ) : (
+                    closedData.months.map((m) => (
+                      <div
+                        key={m.monthKey}
+                        onClick={() => {
+                          setSelectedClosedMonth(m.monthKey);
+                          setExpandedClosedModule(null);
+                        }}
+                        className={`
+                          flex items-center justify-between px-4 py-3 cursor-pointer border-b border-[#F5F1EB] transition-colors
+                          ${selectedClosedMonth === m.monthKey ? "bg-[#FAF7F2] border-l-4 border-l-[#F26B5B]" : "hover:bg-[#FAFAF8]"}
+                        `}
+                      >
+                        <div>
+                          <p className="text-[13px] font-semibold">{m.month}</p>
+                          <p className="text-[10px] text-[#999]">{m.modules.length} module{m.modules.length !== 1 ? "s" : ""}</p>
+                        </div>
+                        <ChevronRight size={14} className="text-[#ccc]" />
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Module Cards */}
+              <div className="flex-1 overflow-y-auto">
+                {(() => {
+                  const selectedMonth = closedData.months.find(m => m.monthKey === selectedClosedMonth);
+                  if (!selectedMonth) {
+                    return (
+                      <div className="flex items-center justify-center h-full">
+                        <div className="text-center">
+                          <Archive size={48} className="text-[#ddd] mx-auto mb-3" />
+                          <p className="text-[14px] text-[#999]">Select a month to view processed sheets</p>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="flex flex-col gap-4">
+                      <div className="flex items-center justify-between">
+                        <h2 className="text-[18px] font-bold">{selectedMonth.month}</h2>
+                        <span className="text-[11px] text-[#999]">
+                          {selectedMonth.modules.reduce((s, m) => s + m.rowCount, 0)} total records
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        {selectedMonth.modules.map((mod) => (
+                          <div key={mod.module} className="bg-white border border-[#E7E3DC] rounded-2xl overflow-hidden">
+                            <div className="p-4 flex items-center justify-between">
+                              <div>
+                                <h3 className="text-[14px] font-bold">{mod.module}</h3>
+                                <p className="text-[11px] text-[#999] mt-1">{mod.rowCount} record{mod.rowCount !== 1 ? "s" : ""}</p>
+                              </div>
+                              <div className="text-right">
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-semibold">
+                                  <CheckCircle2 size={12} />
+                                  Closed
+                                </span>
+                              </div>
+                            </div>
+                            <div className="px-4 pb-3 flex items-center gap-4 text-[10px] text-[#999]">
+                              <span>Closed: {mod.closedAt}</span>
+                              <span>By: {mod.closedBy}</span>
+                            </div>
+                            <div className="border-t border-[#EFEAE2] px-4 py-3 flex gap-2">
+                              <button
+                                onClick={() => setExpandedClosedModule(expandedClosedModule === mod.module ? null : mod.module)}
+                                className="flex-1 text-[11px] font-semibold text-[#F26B5B] hover:underline text-left"
+                              >
+                                {expandedClosedModule === mod.module ? "Hide Details" : "View Details"}
+                              </button>
+                              <button
+                                onClick={() => exportExcel(mod.rows, `${mod.module}_${selectedMonth.month}.csv`)}
+                                className="flex items-center gap-1 text-[11px] font-semibold text-[#333] hover:text-black"
+                              >
+                                <Download size={12} />
+                                CSV
+                              </button>
+                            </div>
+                            {expandedClosedModule === mod.module && (
+                              <div className="border-t border-[#EFEAE2] overflow-x-auto">
+                                <table className="w-full">
+                                  <thead className="bg-[#FAF7F2]">
+                                    <tr>
+                                      <th className="p-2 text-left text-[10px] font-semibold text-[#777]">Emp Code</th>
+                                      <th className="p-2 text-left text-[10px] font-semibold text-[#777]">Name</th>
+                                      <th className="p-2 text-left text-[10px] font-semibold text-[#777]">Amount</th>
+                                      <th className="p-2 text-left text-[10px] font-semibold text-[#777]">Remarks</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {mod.rows.map((r, ri) => (
+                                      <tr key={ri} className="border-t border-[#EFEAE2]">
+                                        <td className="p-2 text-[11px] font-mono">{r.empCode}</td>
+                                        <td className="p-2 text-[11px]">{r.empName || "—"}</td>
+                                        <td className="p-2 text-[11px] font-semibold">{r.amount || "—"}</td>
+                                        <td className="p-2 text-[11px] text-[#777]">{r.remarks || "—"}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
+          )}
 
-            <div className="bg-white border border-[#E7E3DC] rounded-2xl p-5">
-              <p className="text-[11px] text-[#777]">
-                Module
-              </p>
-              <h2 className="text-[24px] font-semibold mt-2 font-mono text-[16px]">
-                {activeModule}
-              </h2>
+          {/* ========== TAB 3: IN PROCESS ========== */}
+          {activeTab === "inprocess" && (
+            <div className="flex flex-col gap-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-[18px] font-bold">Live Processing Tracker</h2>
+                  <p className="text-[12px] text-[#999]">
+                    Real-time progress for all in-flight payroll sheets
+                  </p>
+                </div>
+                <button
+                  onClick={() => { fetchInProcessData(); fetchPayrollData(); }}
+                  className="flex items-center gap-2 px-4 py-2 border border-[#E7E3DC] rounded-xl text-[11px] font-semibold hover:bg-[#FAF7F2] transition-colors"
+                >
+                  <Loader2 size={13} />
+                  Refresh
+                </button>
+              </div>
+
+              {/* Progress Legend */}
+              <div className="bg-white border border-[#E7E3DC] rounded-2xl p-4 flex items-center gap-6">
+                <span className="text-[11px] text-[#777] font-semibold">Pipeline Stages:</span>
+                {[
+                  { label: "Maker", color: "#EF4444", pct: "10%" },
+                  { label: "HRBP", color: "#F59E0B", pct: "35%" },
+                  { label: "HOD", color: "#3B82F6", pct: "60%" },
+                  { label: "Payroll", color: "#22C55E", pct: "85%" },
+                  { label: "Closed", color: "#111", pct: "100%" },
+                ].map(s => (
+                  <div key={s.label} className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: s.color }}></div>
+                    <span className="text-[11px]">{s.label}</span>
+                    <span className="text-[9px] text-[#bbb]">{s.pct}</span>
+                  </div>
+                ))}
+              </div>
+
+              {inProcessData.modules.length === 0 ? (
+                <div className="flex items-center justify-center py-20">
+                  <div className="text-center">
+                    <CheckCircle2 size={48} className="text-emerald-300 mx-auto mb-3" />
+                    <p className="text-[14px] text-[#999]">All clear! No sheets currently in process.</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {inProcessData.modules.map((mod) => (
+                    <div key={mod.module} className="bg-white border border-[#E7E3DC] rounded-2xl p-5">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <BadgeIndianRupee size={18} className="text-[#F26B5B]" />
+                          <div>
+                            <h3 className="text-[14px] font-bold">{mod.module}</h3>
+                            <p className="text-[11px] text-[#999]">{mod.totalRows} record{mod.totalRows !== 1 ? "s" : ""}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[12px] font-bold" style={{ color: getProgressColor(mod.progress) }}>
+                            {mod.progress}%
+                          </span>
+                          <p className="text-[10px] text-[#999]">{mod.currentStage}</p>
+                        </div>
+                      </div>
+
+                      {/* Progress Bar */}
+                      <div className="w-full h-3 rounded-full overflow-hidden" style={{ backgroundColor: getProgressBg(mod.progress) }}>
+                        <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{
+                            width: `${mod.progress}%`,
+                            backgroundColor: getProgressColor(mod.progress)
+                          }}
+                        ></div>
+                      </div>
+
+                      {/* Stage breakdown */}
+                      <div className="flex gap-4 mt-3">
+                        {Object.entries(mod.stages).map(([stage, count]) => (
+                          <div key={stage} className="flex items-center gap-1.5">
+                            <div className="w-2 h-2 rounded-full" style={{
+                              backgroundColor: count > 0
+                                ? { MAKER: "#EF4444", HRBP: "#F59E0B", HOD: "#3B82F6", PAYROLL: "#22C55E" }[stage]
+                                : "#E5E5E5"
+                            }}></div>
+                            <span className={`text-[10px] ${count > 0 ? "font-semibold text-[#333]" : "text-[#ccc]"}`}>
+                              {stage}: {count}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
+          )}
 
-            <div className="bg-white border border-[#E7E3DC] rounded-2xl p-5">
-              <p className="text-[11px] text-[#777]">
-                Status
-              </p>
-              <h2 className="text-[24px] font-semibold mt-2">
-                Approved
-              </h2>
-            </div>
-          </div>
-
-          <div className="bg-white border border-[#E7E3DC] rounded-2xl overflow-hidden mb-5">
-
-    <table className="w-full">
-
-      <thead className="bg-[#FAF7F2]">
-        <tr>
-          <th className="p-3 text-left">S No</th>
-          <th className="p-3 text-left">Employee Code</th>
-          <th className="p-3 text-left">Pay Component</th>
-          <th className="p-3 text-left">Payment Frequency</th>
-          <th className="p-3 text-left">Effective From</th>
-          <th className="p-3 text-left">Effective To</th>
-          <th className="p-3 text-left">Amount</th>
-          <th className="p-3 text-left">Reason</th>
-          <th className="p-3 text-left">Remarks</th>
-          <th className="p-3 text-left">Payment for the month</th>
-        </tr>
-      </thead>
-
-      <tbody>
-
-  {filteredRows.map((row, index) => (
-
-    <tr
-      key={index}
-      className="border-t border-[#EFEAE2]"
-    >
-
-      <td className="p-3 text-[12px]">
-        {index + 1}
-      </td>
-
-      <td className="p-3 text-[12px]">
-        {row.empCode}
-      </td>
-
-      <td className="p-3 text-[12px]">
-        {row.type}
-      </td>
-
-      <td className="p-3 text-[12px]">
-        {row.grade}
-      </td>
-
-      <td className="p-3 text-[12px]">
-        {row.designation}
-      </td>
-
-      <td className="p-3 text-[12px]">
-        {row.employeeHome}
-      </td>
-
-      <td className="p-3 text-[12px]">
-        {row.amount}
-      </td>
-
-      <td className="p-3 text-[12px]">
-        {row.overtimeHours}
-      </td>
-
-      <td className="p-3 text-[12px]">
-        {row.remarks}
-      </td>
-
-      <td className="p-3 text-[12px]">
-        {row.holidayDate}
-      </td>
-
-    </tr>
-
-  ))}
-
-</tbody>
-
-    </table>
-
-  </div>
-
-  <div className="flex justify-center">
-
-    <button
-      onClick={exportExcel}
-      className="
-        flex
-        items-center
-        gap-3
-        px-10
-        py-5
-        bg-black
-        text-white
-        rounded-2xl
-        text-[15px]
-        font-medium
-      "
-    >
-      <Download size={20} />
-      Export Payroll Sheet
-    </button>
-
-  </div>
-
-</div>
-
+        </div>
       </div>
-
     </div>
   );
 }

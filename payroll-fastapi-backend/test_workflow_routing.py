@@ -133,7 +133,62 @@ def test_workflow_routing():
     assert len(minakshi_items_in_khwaja_queue) == 1
     assert minakshi_items_in_khwaja_queue[0]["amount"] == "10000"
 
-    print("🎉 ALL WORKFLOW ROUTING INTEGRATION TESTS PASSED!")
+    # 8. Approve sheet in Rashi's queue (from step 4) to send it to Payroll stage
+    approve_resp = client.get("/api/workflow/submit-payroll", headers=rashi_headers)
+    assert approve_resp.status_code == 200
+    assert approve_resp.json()["message"] == "Sent to Payroll"
+
+    # 9. Login as Payroll Admin
+    payroll_login = client.post("/api/auth/sso-login", json={"email": "payroll@company.com"})
+    assert payroll_login.status_code == 200
+    payroll_data = payroll_login.json()
+    assert payroll_data["role"] == "payroll"
+    payroll_token = payroll_data["token"]
+    payroll_headers = {"Authorization": f"Bearer {payroll_token}"}
+
+    # 10. Check Payroll Queue
+    payroll_queue_resp = client.get("/api/workflow/payroll", headers=payroll_headers)
+    assert payroll_queue_resp.status_code == 200
+    payroll_queue = payroll_queue_resp.json()
+    assert len(payroll_queue) == 1
+    assert payroll_queue[0]["initiatorEmail"] == "rupali.chaudhary@1mg.com"
+    assert payroll_queue[0]["amount"] == "5000"
+
+    # 11. Finalize & Close the sheet for REFERRAL BONUS module
+    close_resp = client.post("/api/workflow/payroll/close", json={"module": "REFERRAL BONUS"}, headers=payroll_headers)
+    assert close_resp.status_code == 200
+    assert close_resp.json()["closed_count"] == 1
+
+    # 12. Check that Payroll queue is now empty
+    payroll_queue_empty_resp = client.get("/api/workflow/payroll", headers=payroll_headers)
+    assert payroll_queue_empty_resp.status_code == 200
+    assert len(payroll_queue_empty_resp.json()) == 0
+
+    # 13. Verify Closed/Processed archive grouping
+    closed_archive_resp = client.get("/api/workflow/closed", headers=payroll_headers)
+    assert closed_archive_resp.status_code == 200
+    closed_archive = closed_archive_resp.json()
+    assert "months" in closed_archive
+    assert len(closed_archive["months"]) > 0
+    # The default mock date is fallback since paymentMonth is not set for test row.
+    # Verify module details are present.
+    modules_in_archive = [m["module"] for m in closed_archive["months"][0]["modules"]]
+    assert "REFERRAL BONUS" in modules_in_archive
+
+    # 14. Verify In-Process tracker excludes closed sheet but includes Khwaja's pending HOD sheet
+    in_process_resp = client.get("/api/workflow/in-process", headers=payroll_headers)
+    assert in_process_resp.status_code == 200
+    in_process = in_process_resp.json()
+    assert "modules" in in_process
+    in_process_modules = [m["module"] for m in in_process["modules"]]
+    assert "REFERRAL BONUS" in in_process_modules
+    # Khwaja's pending row count for REFERRAL BONUS should be 1
+    ref_bonus_in_proc = next(m for m in in_process["modules"] if m["module"] == "REFERRAL BONUS")
+    assert ref_bonus_in_proc["totalRows"] == 1
+    assert ref_bonus_in_proc["stages"]["HOD"] == 1
+
+    print("🎉 ALL WORKFLOW ROUTING & CLOSURE INTEGRATION TESTS PASSED!")
 
 if __name__ == "__main__":
     test_workflow_routing()
+

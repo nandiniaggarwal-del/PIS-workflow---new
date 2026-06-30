@@ -3,7 +3,7 @@ import json
 import os
 import sys
 
-BASE_URL = "http://localhost:5001/api"
+BASE_URL = "http://localhost:8000/api"
 def get_auth_token(email: str) -> str:
     res = requests.post(f"{BASE_URL}/auth/sso-login", json={"email": email})
     if res.status_code != 200:
@@ -15,9 +15,9 @@ def get_auth_token(email: str) -> str:
 
 def main():
     
-    maker_email = "nandini.aggarwal@1mg.com"
-    hrbp_email = "mukul.vaibhav@1mg.com"
-    hod_email = "hod@company.com"
+    maker_email = "business.spoc@1mg.com"
+    hrbp_email = "charvi.sarin@1mg.com"
+    hod_email = "business.hod@1mg.com"
     
     print("\n1. Simulating Maker Login...")
     maker_token = get_auth_token(maker_email)
@@ -32,8 +32,8 @@ def main():
         "grade": "M3",
         "designation": "Manager",
         "employeeHome": "Office",
-        "type": "Overtime",
-        "module": "Overtime",
+        "type": "OVERTIME HOURS",
+        "module": "OVERTIME HOURS",
         "amount": "8000",
         "overtimeHours": "10",
         "remarks": "Overtime verified by manager",

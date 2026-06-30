@@ -22,7 +22,18 @@ if not DATABASE_URL:
     print(f"Database: Running local development sandbox (SQLite: {sqlite_db_path})")
 else:
     # Connecting to target enterprise PostgreSQL server
-    engine = create_engine(DATABASE_URL, pool_size=10, max_overflow=20)
+    # Add connection pooling parameters:
+    # - pool_pre_ping: test connection health before giving it to FastAPI
+    # - pool_recycle: automatically recycle connections every 30 minutes
+    # - connect_timeout: fail fast if database is down
+    engine = create_engine(
+        DATABASE_URL,
+        pool_size=15,
+        max_overflow=25,
+        pool_pre_ping=True,
+        pool_recycle=1800,
+        connect_args={"connect_timeout": 10}
+    )
     print("Database: Running enterprise connection (PostgreSQL)")
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
