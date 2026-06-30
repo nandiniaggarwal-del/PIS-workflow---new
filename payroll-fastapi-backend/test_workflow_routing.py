@@ -9,19 +9,23 @@ from main import app
 import models
 
 def test_workflow_routing():
-    client = TestClient(app)
-
-    # Clean up any leftover database records to ensure test isolation
-    from database import SessionLocal
+    # Make sure tables are created and seeded in SQLite for the test client
+    from database import engine, SessionLocal
+    from main import seed_database
+    models.Base.metadata.create_all(bind=engine)
+    
     db = SessionLocal()
     try:
         db.query(models.WorkflowQueue).delete()
         db.query(models.Notification).delete()
         db.commit()
+        seed_database(db)
     except Exception as e:
         db.rollback()
     finally:
         db.close()
+
+    client = TestClient(app)
 
     # 1. Login as Rupali Chaudhary (Maker, ID: 1MG6270)
     login_resp = client.post("/api/auth/sso-login", json={"email": "rupali.chaudhary@1mg.com"})
@@ -139,7 +143,7 @@ def test_workflow_routing():
     assert approve_resp.json()["message"] == "Sent to Payroll"
 
     # 9. Login as Payroll Admin
-    payroll_login = client.post("/api/auth/sso-login", json={"email": "payroll@company.com"})
+    payroll_login = client.post("/api/auth/sso-login", json={"email": "payroll@1mg.com"})
     assert payroll_login.status_code == 200
     payroll_data = payroll_login.json()
     assert payroll_data["role"] == "payroll"
