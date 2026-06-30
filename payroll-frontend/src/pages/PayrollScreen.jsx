@@ -394,18 +394,54 @@ export default function PayrollScreen() {
           {/* ========== TAB 1: PAYROLL QUEUE ========== */}
           {activeTab === "queue" && (
             <>
-              <div className="grid grid-cols-3 gap-4 mb-5">
-                <div className="bg-white border border-[#E7E3DC] rounded-2xl p-5">
-                  <p className="text-[11px] text-[#777]">Total Records</p>
-                  <h2 className="text-[24px] font-semibold mt-2">{filteredRows.length}</h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+                {/* Total Records */}
+                <div className="bg-white border border-[#E7E3DC] rounded-2xl p-5 flex flex-col justify-between">
+                  <p className="text-[11px] text-[#777] font-semibold">Total Records</p>
+                  <h2 className="text-[24px] font-semibold mt-2 text-neutral-800">{filteredRows.length}</h2>
                 </div>
-                <div className="bg-white border border-[#E7E3DC] rounded-2xl p-5">
-                  <p className="text-[11px] text-[#777]">Module</p>
-                  <h2 className="text-[16px] font-semibold mt-2 font-mono">{activeModule}</h2>
+
+                {/* Earning Head Selector Dropdown */}
+                <div className="bg-white border border-[#E7E3DC] rounded-2xl p-5 flex flex-col justify-between">
+                  <p className="text-[11px] text-[#777] font-semibold">Active Earning Head</p>
+                  <select
+                    value={activeModule}
+                    onChange={(e) => setActiveModule(e.target.value)}
+                    className="w-full mt-2 border border-[#E7E3DC] p-2.5 rounded-xl text-[12px] bg-[#FAF7F2] outline-none focus:border-[#F26B5B] transition-all font-semibold text-neutral-800 cursor-pointer"
+                  >
+                    {modules.map(mod => (
+                      <option key={mod.name} value={mod.name}>{mod.name}</option>
+                    ))}
+                  </select>
                 </div>
-                <div className="bg-white border border-[#E7E3DC] rounded-2xl p-5">
-                  <p className="text-[11px] text-[#777]">Status</p>
-                  <h2 className="text-[24px] font-semibold mt-2 text-amber-600">Pending Closure</h2>
+
+                {/* Action Buttons Panel */}
+                <div className="bg-white border border-[#E7E3DC] rounded-2xl p-5 flex flex-col justify-between">
+                  <p className="text-[11px] text-[#777] font-semibold">Queue Actions</p>
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      onClick={() => exportExcel()}
+                      disabled={filteredRows.length === 0}
+                      className="flex-1 flex items-center justify-center gap-2 h-[38px] bg-black text-white rounded-xl text-[11px] font-semibold hover:bg-neutral-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      title="Export all rows to standard payroll CSV format"
+                    >
+                      <Download size={14} />
+                      Export CSV
+                    </button>
+                    <button
+                      onClick={() => handleCloseModule(activeModule)}
+                      disabled={filteredRows.length === 0 || closingModule === activeModule}
+                      className="flex-1 flex items-center justify-center gap-2 h-[38px] bg-emerald-600 text-white rounded-xl text-[11px] font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      title="Finalize these rows and move them to Closed/Processed archive"
+                    >
+                      {closingModule === activeModule ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <CheckCircle2 size={14} />
+                      )}
+                      Close Sheet
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -442,38 +478,20 @@ export default function PayrollScreen() {
                     ))}
                     {filteredRows.length === 0 && (
                       <tr>
-                        <td colSpan="10" className="p-8 text-center text-[13px] text-[#999]">
-                          No pending sheets for this module
+                        <td colSpan="10" className="p-10 text-center">
+                          <div className="max-w-[320px] mx-auto py-2">
+                            <Clock size={32} className="text-neutral-300 mx-auto mb-2" />
+                            <p className="text-[12px] font-semibold text-neutral-700">No Pending Records</p>
+                            <p className="text-[10px] text-[#888] mt-1">
+                              When a maker submits a sheet and the HOD approves it, data will appear here. The "Export" and "Close" actions above will then become active.
+                            </p>
+                          </div>
                         </td>
                       </tr>
                     )}
                   </tbody>
                 </table>
               </div>
-
-              {filteredRows.length > 0 && (
-                <div className="flex justify-center gap-4">
-                  <button
-                    onClick={() => exportExcel()}
-                    className="flex items-center gap-3 px-8 py-4 bg-black text-white rounded-2xl text-[13px] font-medium hover:bg-neutral-800 transition-colors"
-                  >
-                    <Download size={18} />
-                    Export CSV
-                  </button>
-                  <button
-                    onClick={() => handleCloseModule(activeModule)}
-                    disabled={closingModule === activeModule}
-                    className="flex items-center gap-3 px-8 py-4 bg-emerald-600 text-white rounded-2xl text-[13px] font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50"
-                  >
-                    {closingModule === activeModule ? (
-                      <Loader2 size={18} className="animate-spin" />
-                    ) : (
-                      <CheckCircle2 size={18} />
-                    )}
-                    Finalize & Close
-                  </button>
-                </div>
-              )}
             </>
           )}
 
