@@ -608,96 +608,124 @@ export default function PayrollScreen() {
 
           {/* ========== TAB 3: IN PROCESS ========== */}
           {activeTab === "inprocess" && (
-            <div className="flex flex-col gap-5">
+            <div className="flex flex-col gap-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-[18px] font-bold">Live Processing Tracker</h2>
-                  <p className="text-[12px] text-[#999]">
-                    Real-time progress for all in-flight payroll sheets
+                  <h2 className="text-[15px] font-semibold text-neutral-800">Live Processing Tracker</h2>
+                  <p className="text-[11px] text-[#777]">
+                    Real-time progress for active sheets in the approval pipeline
                   </p>
                 </div>
                 <button
                   onClick={() => { fetchInProcessData(); fetchPayrollData(); }}
-                  className="flex items-center gap-2 px-4 py-2 border border-[#E7E3DC] rounded-xl text-[11px] font-semibold hover:bg-[#FAF7F2] transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 border border-[#E7E3DC] rounded-xl text-[11px] font-semibold bg-white hover:bg-[#FAF7F2] transition-colors"
                 >
-                  <Loader2 size={13} />
+                  <Loader2 size={13} className="text-[#F26B5B]" />
                   Refresh
                 </button>
               </div>
 
-              {/* Progress Legend */}
-              <div className="bg-white border border-[#E7E3DC] rounded-2xl p-4 flex items-center gap-6">
-                <span className="text-[11px] text-[#777] font-semibold">Pipeline Stages:</span>
-                {[
-                  { label: "Maker", color: "#EF4444", pct: "10%" },
-                  { label: "HRBP", color: "#F59E0B", pct: "35%" },
-                  { label: "HOD", color: "#3B82F6", pct: "60%" },
-                  { label: "Payroll", color: "#22C55E", pct: "85%" },
-                  { label: "Closed", color: "#111", pct: "100%" },
-                ].map(s => (
-                  <div key={s.label} className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: s.color }}></div>
-                    <span className="text-[11px]">{s.label}</span>
-                    <span className="text-[9px] text-[#bbb]">{s.pct}</span>
-                  </div>
-                ))}
-              </div>
-
               {inProcessData.modules.length === 0 ? (
-                <div className="flex items-center justify-center py-20">
-                  <div className="text-center">
-                    <CheckCircle2 size={48} className="text-emerald-300 mx-auto mb-3" />
-                    <p className="text-[14px] text-[#999]">All clear! No sheets currently in process.</p>
-                  </div>
+                <div className="bg-white border border-[#E7E3DC] rounded-2xl p-12 text-center">
+                  <CheckCircle2 size={40} className="text-[#22C55E] mx-auto mb-3" />
+                  <p className="text-[13px] font-medium text-neutral-800">All Clear!</p>
+                  <p className="text-[11px] text-[#777] mt-1">No sheets currently in the approval queue.</p>
                 </div>
               ) : (
-                <div className="flex flex-col gap-3">
-                  {inProcessData.modules.map((mod) => (
-                    <div key={mod.module} className="bg-white border border-[#E7E3DC] rounded-2xl p-5">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <BadgeIndianRupee size={18} className="text-[#F26B5B]" />
+                <div className="flex flex-col gap-4">
+                  {inProcessData.modules.map((mod) => {
+                    // Check if HRBP is bypassed for this earning head config
+                    const headConfig = modules.find(m => m.name === mod.module);
+                    const isHrbpBypassed = headConfig?.hrbp === "NA";
+                    
+                    // Define dynamic stages based on config bypass rules
+                    const steps = isHrbpBypassed
+                      ? [
+                          { key: "MAKER", label: "Maker" },
+                          { key: "HOD", label: "HOD Approval" },
+                          { key: "PAYROLL", label: "Payroll Queue" }
+                        ]
+                      : [
+                          { key: "MAKER", label: "Maker" },
+                          { key: "HRBP", label: "HRBP Review" },
+                          { key: "HOD", label: "HOD Approval" },
+                          { key: "PAYROLL", label: "Payroll Queue" }
+                        ];
+
+                    // Resolve the earliest active status in stages
+                    const currentStatusKey = ["MAKER", "HRBP", "HOD", "PAYROLL"].find(s => mod.stages[s] > 0) || "MAKER";
+                    const currentStepIndex = steps.findIndex(s => s.key === currentStatusKey);
+                    
+                    return (
+                      <div key={mod.module} className="bg-white border border-[#E7E3DC] rounded-2xl p-5 hover:shadow-sm transition-shadow">
+                        {/* Header Details */}
+                        <div className="flex items-center justify-between mb-4 border-b border-[#FAF7F2] pb-3">
                           <div>
-                            <h3 className="text-[14px] font-bold">{mod.module}</h3>
-                            <p className="text-[11px] text-[#999]">{mod.totalRows} record{mod.totalRows !== 1 ? "s" : ""}</p>
+                            <h3 className="text-[13px] font-bold text-neutral-800 uppercase tracking-wider">{mod.module}</h3>
+                            <p className="text-[10px] text-[#777] mt-0.5">{mod.totalRows} row{mod.totalRows !== 1 ? "s" : ""} pending</p>
                           </div>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-[12px] font-bold" style={{ color: getProgressColor(mod.progress) }}>
-                            {mod.progress}%
-                          </span>
-                          <p className="text-[10px] text-[#999]">{mod.currentStage}</p>
-                        </div>
-                      </div>
-
-                      {/* Progress Bar */}
-                      <div className="w-full h-3 rounded-full overflow-hidden" style={{ backgroundColor: getProgressBg(mod.progress) }}>
-                        <div
-                          className="h-full rounded-full transition-all duration-500"
-                          style={{
-                            width: `${mod.progress}%`,
-                            backgroundColor: getProgressColor(mod.progress)
-                          }}
-                        ></div>
-                      </div>
-
-                      {/* Stage breakdown */}
-                      <div className="flex gap-4 mt-3">
-                        {Object.entries(mod.stages).map(([stage, count]) => (
-                          <div key={stage} className="flex items-center gap-1.5">
-                            <div className="w-2 h-2 rounded-full" style={{
-                              backgroundColor: count > 0
-                                ? { MAKER: "#EF4444", HRBP: "#F59E0B", HOD: "#3B82F6", PAYROLL: "#22C55E" }[stage]
-                                : "#E5E5E5"
-                            }}></div>
-                            <span className={`text-[10px] ${count > 0 ? "font-semibold text-[#333]" : "text-[#ccc]"}`}>
-                              {stage}: {count}
+                          
+                          <div className="text-right">
+                            <span className="text-[10px] font-medium text-[#777] bg-[#FAF7F2] border border-[#EFEAE2] px-2.5 py-1 rounded-full">
+                              Stage: <span className="font-bold text-[#F26B5B]">{mod.currentStage}</span>
                             </span>
                           </div>
-                        ))}
+                        </div>
+
+                        {/* Timeline Stepper */}
+                        <div className="relative flex items-center justify-between w-full mt-6 mb-2 px-10">
+                          {/* Stepper Connecting Background Line */}
+                          <div className="absolute left-12 right-12 top-[13px] h-[2px] bg-[#FAF7F2] border-t border-[#EFEAE2] z-0"></div>
+                          
+                          {/* Stepper Progress Fill Line */}
+                          <div 
+                            className="absolute left-12 top-[13px] h-[2px] bg-[#F26B5B] transition-all duration-500 z-0"
+                            style={{ 
+                              width: `${currentStepIndex <= 0 ? 0 : (currentStepIndex / (steps.length - 1)) * 100}%`,
+                              maxWidth: 'calc(100% - 6rem)'
+                            }}
+                          ></div>
+
+                          {steps.map((step, idx) => {
+                            const isCompleted = idx < currentStepIndex;
+                            const isActive = idx === currentStepIndex;
+                            
+                            return (
+                              <div key={step.key} className="flex flex-col items-center z-10 relative">
+                                {/* Dot Indicator */}
+                                <div 
+                                  className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold border transition-all duration-300
+                                    ${isCompleted 
+                                      ? "bg-black border-black text-white" 
+                                      : isActive 
+                                        ? "bg-white border-[#F26B5B] text-[#F26B5B] shadow-[0_0_8px_rgba(242,107,91,0.25)] scale-110" 
+                                        : "bg-white border-[#E7E3DC] text-[#aaa]"
+                                    }
+                                  `}
+                                >
+                                  {isCompleted ? "✓" : idx + 1}
+                                </div>
+                                
+                                {/* Label Text */}
+                                <span 
+                                  className={`text-[10px] mt-2 font-medium transition-all duration-300
+                                    ${isCompleted 
+                                      ? "text-neutral-800" 
+                                      : isActive 
+                                        ? "text-[#F26B5B] font-semibold" 
+                                        : "text-[#aaa]"
+                                    }
+                                  `}
+                                >
+                                  {step.label}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
