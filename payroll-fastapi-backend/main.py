@@ -31,6 +31,7 @@ app = FastAPI(title="Payroll Workflow Backend", version="1.0.0")
 
 # Helper to get workflow config with DB persistence and fallback to file
 def load_workflow_config(db: Session = None):
+    config = None
     # Try reading from SQL database first
     close_db_manually = False
     if db is None:
@@ -44,23 +45,98 @@ def load_workflow_config(db: Session = None):
         try:
             db_config = db.query(models.WorkflowConfig).filter(models.WorkflowConfig.key == "active_config").first()
             if db_config:
-                return db_config.config
+                config = db_config.config
         except Exception as e:
             print(f"Warning: Database error loading config: {e}. Falling back to file.")
         finally:
             if close_db_manually:
                 db.close()
 
-    # Fallback to local json file
-    config_path = os.path.join(BASE_DATA_DIR, "workflow_config.json")
-    if not os.path.exists(config_path):
-        return {"users": [], "earning_heads": []}
-    try:
-        with open(config_path, "r") as f:
-            return json.load(f)
-    except Exception as e:
-        print(f"Error reading backup file: {e}")
-        return {"users": [], "earning_heads": []}
+    if config is None:
+        # Fallback to local json file
+        config_path = os.path.join(BASE_DATA_DIR, "workflow_config.json")
+        if not os.path.exists(config_path):
+            config = {"users": [], "earning_heads": []}
+        else:
+            try:
+                with open(config_path, "r") as f:
+                    config = json.load(f)
+            except Exception as e:
+                print(f"Error reading backup file: {e}")
+                config = {"users": [], "earning_heads": []}
+
+    # Merge dynamic users from routing matrix
+    dynamic_users_path = os.path.join(BASE_DATA_DIR, "dynamic_users.json")
+    if os.path.exists(dynamic_users_path):
+        try:
+            with open(dynamic_users_path, "r") as f:
+                dynamic_users = json.load(f)
+            existing_emails = {u["email"].lower().strip() for u in config.get("users", [])}
+            for du in dynamic_users:
+                if du["email"].lower().strip() not in existing_emails:
+                    config.setdefault("users", []).append(du)
+        except Exception as e:
+            print(f"Warning: Failed to load dynamic_users: {e}")
+            
+    return config
+
+# Helper to resolve row-level route based on routing matrix json or fallback config defaults
+def resolve_route(module_name, initiator_email, employee_home, config):
+    if not module_name:
+        return "NA", None
+    
+    initiator_email = initiator_email.strip().lower()
+    employee_home = employee_home.strip().lower() if employee_home else "all"
+    
+    # 1. Load routing matrix json
+    matrix_path = os.path.join(BASE_DATA_DIR, "routing_matrix.json")
+    if os.path.exists(matrix_path):
+        try:
+            with open(matrix_path, "r") as f:
+                matrix = json.load(f)
+            for rule in matrix:
+                if rule.get("earning_head", "").strip().lower() != module_name.strip().lower():
+                    continue
+                
+                # Check initiators (can be multiple)
+                rule_initiators = [email.strip().lower() for email in rule.get("initiators", [])]
+                if initiator_email not in rule_initiators:
+                    continue
+                
+                # Check Employee Home
+                rule_home = rule.get("employee_home", "").strip().lower()
+                if rule_home != "all" and rule_home != "*" and employee_home != rule_home:
+                    continue
+                
+                # We found a matching rule! Return the first HRBP and first Approver email
+                hrbp_emails = rule.get("hrbps", [])
+                approver_emails = rule.get("approvers", [])
+                
+                hrbp_email = hrbp_emails[0] if hrbp_emails else "NA"
+                approver_email = approver_emails[0] if approver_emails else None
+                return hrbp_email, approver_email
+        except Exception as e:
+            print(f"Warning: Error reading routing matrix: {e}")
+
+    # 2. Fallback to default earning heads config
+    head_config = next((h for h in config.get("earning_heads", []) if h["name"].strip().lower() == module_name.strip().lower()), None)
+    if head_config:
+        default_hrbp_id = head_config.get("hrbp")
+        default_appr_id = head_config.get("approver")
+        
+        def get_email_by_empid(empid):
+            if not empid or empid == "NA":
+                return "NA"
+            if isinstance(empid, list):
+                empid = empid[0] if empid else "NA"
+            user_obj = next((u for u in config.get("users", []) if u.get("employee_id") == empid), None)
+            return user_obj["email"] if user_obj else None
+
+        hrbp_email = get_email_by_empid(default_hrbp_id)
+        approver_email = get_email_by_empid(default_appr_id)
+        return hrbp_email, approver_email
+
+    return "NA", None
 
 # Helper to save workflow config to DB and local backup file
 def save_workflow_config(config_data, db: Session = None):
@@ -550,32 +626,21 @@ async def submit_to_hrbp(db: Session = Depends(get_db), user: dict = Depends(req
          raise HTTPException(status_code=400, detail="Maker queue is empty")
          
     active_module = items[0].module or "Payroll"
-    head_config = next((h for h in config.get("earning_heads", []) if h["name"] == active_module), None)
-    
-    # Check if HRBP is NA
-    has_hrbp = True
-    if head_config and head_config.get("hrbp") == "NA":
-        has_hrbp = False
-        
     timestamp = get_timestamp_str()
-    next_status = "HRBP" if has_hrbp else "HOD"
     
-    # If routed directly to HOD, resolve the approver ID
-    approver_id = None
-    if not has_hrbp:
-        if head_config and "routing_rules" in head_config:
-            maker_emp_code = items[0].initiatorEmpCode
-            for rule in head_config["routing_rules"]:
-                if maker_emp_code in rule.get("initiator_ids", []):
-                    approver_id = rule.get("approver")
-                    break
-        if not approver_id and head_config:
-            approver_id = head_config.get("approver")
-            
+    sent_to_hrbp = False
+    sent_to_hod = False
+    
     for item in items:
+        # Resolve route for each row dynamically
+        hrbp_email, approver_email = resolve_route(item.module, email, item.employeeHome, config)
+        has_hrbp = hrbp_email and hrbp_email != "NA"
+        
+        next_status = "HRBP" if has_hrbp else "HOD"
         item.status = next_status
-        history = list(item.history) if item.history else []
+        
         action_text = "Submitted by Maker" if has_hrbp else "Submitted by Maker (Bypassed HRBP)"
+        history = list(item.history) if item.history else []
         history.append({
             "action": action_text,
             "user": maker_name,
@@ -583,27 +648,28 @@ async def submit_to_hrbp(db: Session = Depends(get_db), user: dict = Depends(req
         })
         item.history = history
         
+        if has_hrbp:
+            create_notification(db, hrbp_email, f"New {item.module} sheet submitted by {maker_name} is pending review.")
+            sent_to_hrbp = True
+        else:
+            if approver_email:
+                create_notification(db, approver_email, f"New {item.module} sheet submitted by {maker_name} is pending your approval.")
+                sent_to_hod = True
+                
     audit = models.AuditHistory(
         action=f"Submitted Sheet ({active_module})",
         user=maker_name,
-        remarks=f"Pending review/approval in {next_status} stage",
+        remarks="Pending review/approval",
         timestamp=timestamp
     )
     db.add(audit)
     db.commit()
     
-    # Create notifications dynamically
-    if has_hrbp:
-        hrbp_ids = head_config.get("hrbp", []) if head_config else []
-        hrbp_users = [u for u in config.get("users", []) if u["employee_id"] in hrbp_ids]
-        for h in hrbp_users:
-            create_notification(db, h["email"], f"New {active_module} sheet submitted by {maker_name} is pending review.")
+    if sent_to_hrbp and sent_to_hod:
+        msg = "Sent to HRBP & HOD (Row-level Split)"
+    elif sent_to_hrbp:
         msg = "Sent to HRBP"
     else:
-        # HOD notification
-        hod_user = next((u for u in config.get("users", []) if u["employee_id"] == approver_id), None)
-        if hod_user:
-            create_notification(db, hod_user["email"], f"New {active_module} sheet submitted by {maker_name} is pending your approval.")
         msg = "Sent directly to Approver (HOD)"
         
     return {"message": msg}
@@ -613,19 +679,13 @@ async def get_hrbp_data(db: Session = Depends(get_db), user: dict = Depends(requ
     email = user["email"].lower().strip()
     config = load_workflow_config()
     
-    config_user = next((u for u in config.get("users", []) if u["email"].strip().lower() == email), None)
-    hrbp_id = config_user.get("employee_id", "") if config_user else ""
-    
-    # Filter earning heads assigned to this HRBP
-    assigned_modules = []
-    for h in config.get("earning_heads", []):
-        if isinstance(h.get("hrbp"), list) and hrbp_id in h["hrbp"]:
-            assigned_modules.append(h["name"])
-            
-    return db.query(models.WorkflowQueue).filter(
-        models.WorkflowQueue.status == "HRBP",
-        models.WorkflowQueue.module.in_(assigned_modules)
-    ).all()
+    items = db.query(models.WorkflowQueue).filter(models.WorkflowQueue.status == "HRBP").all()
+    filtered_items = []
+    for item in items:
+        hrbp_email, _ = resolve_route(item.module, item.initiatorEmail, item.employeeHome, config)
+        if hrbp_email and hrbp_email.lower().strip() == email:
+            filtered_items.append(item)
+    return filtered_items
 
 @app.post("/api/workflow/save-hrbp-review")
 async def save_hrbp_review(request: Request, db: Session = Depends(get_db), user: dict = Depends(require_roles(["hrbp"]))):
@@ -633,24 +693,14 @@ async def save_hrbp_review(request: Request, db: Session = Depends(get_db), user
     comments = body.get("comments", "")
     flagged = body.get("flaggedColumns", [])
     email = user["email"].lower().strip()
-    
     config = load_workflow_config()
-    config_user = next((u for u in config.get("users", []) if u["email"].strip().lower() == email), None)
-    hrbp_id = config_user.get("employee_id", "") if config_user else ""
     
-    assigned_modules = []
-    for h in config.get("earning_heads", []):
-        if isinstance(h.get("hrbp"), list) and hrbp_id in h["hrbp"]:
-            assigned_modules.append(h["name"])
-            
-    items = db.query(models.WorkflowQueue).filter(
-        models.WorkflowQueue.status == "HRBP",
-        models.WorkflowQueue.module.in_(assigned_modules)
-    ).all()
-    
+    items = db.query(models.WorkflowQueue).filter(models.WorkflowQueue.status == "HRBP").all()
     for item in items:
-        item.hrbpComments = comments
-        item.flaggedColumns = flagged
+        hrbp_email, _ = resolve_route(item.module, item.initiatorEmail, item.employeeHome, config)
+        if hrbp_email and hrbp_email.lower().strip() == email:
+            item.hrbpComments = comments
+            item.flaggedColumns = flagged
     db.commit()
     
     return {"message": "Review Saved"}
@@ -662,38 +712,21 @@ async def submit_to_hod(db: Session = Depends(get_db), user: dict = Depends(requ
     
     config_user = next((u for u in config.get("users", []) if u["email"].strip().lower() == email), None)
     hrbp_name = config_user.get("name", "HRBP User") if config_user else "HRBP User"
-    hrbp_id = config_user.get("employee_id", "") if config_user else ""
     
-    assigned_modules = []
-    for h in config.get("earning_heads", []):
-        if isinstance(h.get("hrbp"), list) and hrbp_id in h["hrbp"]:
-            assigned_modules.append(h["name"])
+    items = db.query(models.WorkflowQueue).filter(models.WorkflowQueue.status == "HRBP").all()
+    filtered_items = []
+    for item in items:
+        hrbp_email, _ = resolve_route(item.module, item.initiatorEmail, item.employeeHome, config)
+        if hrbp_email and hrbp_email.lower().strip() == email:
+            filtered_items.append(item)
             
-    items = db.query(models.WorkflowQueue).filter(
-        models.WorkflowQueue.status == "HRBP",
-        models.WorkflowQueue.module.in_(assigned_modules)
-    ).all()
-    
-    if not items:
+    if not filtered_items:
          raise HTTPException(status_code=400, detail="HRBP queue is empty")
          
     timestamp = get_timestamp_str()
-    active_module = items[0].module or "Payroll"
-    head_config = next((h for h in config.get("earning_heads", []) if h["name"] == active_module), None)
+    active_module = filtered_items[0].module or "Payroll"
     
-    # Resolve Approver ID
-    approver_id = None
-    if head_config:
-        if "routing_rules" in head_config:
-            maker_emp_code = items[0].initiatorEmpCode
-            for rule in head_config["routing_rules"]:
-                if maker_emp_code in rule.get("initiator_ids", []):
-                    approver_id = rule.get("approver")
-                    break
-        if not approver_id:
-            approver_id = head_config.get("approver")
-            
-    for item in items:
+    for item in filtered_items:
         item.status = "HOD"
         history = list(item.history) if item.history else []
         history.append({
@@ -702,6 +735,10 @@ async def submit_to_hod(db: Session = Depends(get_db), user: dict = Depends(requ
             "timestamp": timestamp
         })
         item.history = history
+        
+        _, approver_email = resolve_route(item.module, item.initiatorEmail, item.employeeHome, config)
+        if approver_email:
+            create_notification(db, approver_email, f"A {item.module} sheet is pending your approval (approved by HRBP {hrbp_name}).")
         
     audit = models.AuditHistory(
         action=f"Approved Sheet ({active_module})",
@@ -712,11 +749,6 @@ async def submit_to_hod(db: Session = Depends(get_db), user: dict = Depends(requ
     db.add(audit)
     db.commit()
     
-    # Notification for HOD
-    hod_user = next((u for u in config.get("users", []) if u["employee_id"] == approver_id), None)
-    if hod_user:
-        create_notification(db, hod_user["email"], f"A {active_module} sheet is pending your approval (approved by HRBP {hrbp_name}).")
-        
     return {"message": "Sent to HOD"}
 
 @app.get("/api/workflow/return-maker")
@@ -726,28 +758,24 @@ async def return_to_maker(db: Session = Depends(get_db), user: dict = Depends(re
     
     config_user = next((u for u in config.get("users", []) if u["email"].strip().lower() == email), None)
     hrbp_name = config_user.get("name", "HRBP User") if config_user else "HRBP User"
-    hrbp_id = config_user.get("employee_id", "") if config_user else ""
     
-    assigned_modules = []
-    for h in config.get("earning_heads", []):
-        if isinstance(h.get("hrbp"), list) and hrbp_id in h["hrbp"]:
-            assigned_modules.append(h["name"])
+    items = db.query(models.WorkflowQueue).filter(models.WorkflowQueue.status == "HRBP").all()
+    filtered_items = []
+    for item in items:
+        hrbp_email, _ = resolve_route(item.module, item.initiatorEmail, item.employeeHome, config)
+        if hrbp_email and hrbp_email.lower().strip() == email:
+            filtered_items.append(item)
             
-    items = db.query(models.WorkflowQueue).filter(
-        models.WorkflowQueue.status == "HRBP",
-        models.WorkflowQueue.module.in_(assigned_modules)
-    ).all()
-    
-    if not items:
+    if not filtered_items:
          raise HTTPException(status_code=400, detail="HRBP queue is empty")
          
     timestamp = get_timestamp_str()
-    comments = items[0].hrbpComments or "No comments"
-    active_module = items[0].module or "Payroll"
+    comments = filtered_items[0].hrbpComments or "No comments"
+    active_module = filtered_items[0].module or "Payroll"
     
     # Notify dynamic Maker of each item
     notified_makers = set()
-    for item in items:
+    for item in filtered_items:
         item.status = "MAKER"
         history = list(item.history) if item.history else []
         history.append({
@@ -779,30 +807,12 @@ async def get_hod_data(db: Session = Depends(get_db), user: dict = Depends(requi
     email = user["email"].lower().strip()
     config = load_workflow_config()
     
-    config_user = next((u for u in config.get("users", []) if u["email"].strip().lower() == email), None)
-    hod_id = config_user.get("employee_id", "") if config_user else ""
-    
-    # Load all HOD pending items
     items = db.query(models.WorkflowQueue).filter(models.WorkflowQueue.status == "HOD").all()
     filtered_items = []
-    
-    # Resolve dynamic approver for each sheet
     for item in items:
-        head_config = next((h for h in config.get("earning_heads", []) if h["name"] == item.module), None)
-        approver_id = None
-        if head_config:
-            if "routing_rules" in head_config:
-                maker_emp_code = item.initiatorEmpCode
-                for rule in head_config["routing_rules"]:
-                    if maker_emp_code in rule.get("initiator_ids", []):
-                        approver_id = rule.get("approver")
-                        break
-            if not approver_id:
-                approver_id = head_config.get("approver")
-                
-        if approver_id == hod_id:
+        _, approver_email = resolve_route(item.module, item.initiatorEmail, item.employeeHome, config)
+        if approver_email and approver_email.lower().strip() == email:
             filtered_items.append(item)
-            
     return filtered_items
 
 @app.post("/api/workflow/save-hod-review")
@@ -810,28 +820,13 @@ async def save_hod_review(request: Request, db: Session = Depends(get_db), user:
     body = await request.json()
     comments = body.get("comments", "")
     email = user["email"].lower().strip()
-    
     config = load_workflow_config()
-    config_user = next((u for u in config.get("users", []) if u["email"].strip().lower() == email), None)
-    hod_id = config_user.get("employee_id", "") if config_user else ""
     
     items = db.query(models.WorkflowQueue).filter(models.WorkflowQueue.status == "HOD").all()
     for item in items:
-        head_config = next((h for h in config.get("earning_heads", []) if h["name"] == item.module), None)
-        approver_id = None
-        if head_config:
-            if "routing_rules" in head_config:
-                maker_emp_code = item.initiatorEmpCode
-                for rule in head_config["routing_rules"]:
-                    if maker_emp_code in rule.get("initiator_ids", []):
-                        approver_id = rule.get("approver")
-                        break
-            if not approver_id:
-                approver_id = head_config.get("approver")
-                
-        if approver_id == hod_id:
+        _, approver_email = resolve_route(item.module, item.initiatorEmail, item.employeeHome, config)
+        if approver_email and approver_email.lower().strip() == email:
             item.hodComments = comments
-            
     db.commit()
     return {"message": "HOD Review Saved"}
 
@@ -842,25 +837,12 @@ async def submit_to_payroll(db: Session = Depends(get_db), user: dict = Depends(
     
     config_user = next((u for u in config.get("users", []) if u["email"].strip().lower() == email), None)
     hod_name = config_user.get("name", "HOD User") if config_user else "HOD User"
-    hod_id = config_user.get("employee_id", "") if config_user else ""
     
     items = db.query(models.WorkflowQueue).filter(models.WorkflowQueue.status == "HOD").all()
     filtered_items = []
-    
     for item in items:
-        head_config = next((h for h in config.get("earning_heads", []) if h["name"] == item.module), None)
-        approver_id = None
-        if head_config:
-            if "routing_rules" in head_config:
-                maker_emp_code = item.initiatorEmpCode
-                for rule in head_config["routing_rules"]:
-                    if maker_emp_code in rule.get("initiator_ids", []):
-                        approver_id = rule.get("approver")
-                        break
-            if not approver_id:
-                approver_id = head_config.get("approver")
-                
-        if approver_id == hod_id:
+        _, approver_email = resolve_route(item.module, item.initiatorEmail, item.employeeHome, config)
+        if approver_email and approver_email.lower().strip() == email:
             filtered_items.append(item)
             
     if not filtered_items:
@@ -902,25 +884,12 @@ async def return_to_hrbp(db: Session = Depends(get_db), user: dict = Depends(req
     
     config_user = next((u for u in config.get("users", []) if u["email"].strip().lower() == email), None)
     hod_name = config_user.get("name", "HOD User") if config_user else "HOD User"
-    hod_id = config_user.get("employee_id", "") if config_user else ""
     
     items = db.query(models.WorkflowQueue).filter(models.WorkflowQueue.status == "HOD").all()
     filtered_items = []
-    
     for item in items:
-        head_config = next((h for h in config.get("earning_heads", []) if h["name"] == item.module), None)
-        approver_id = None
-        if head_config:
-            if "routing_rules" in head_config:
-                maker_emp_code = item.initiatorEmpCode
-                for rule in head_config["routing_rules"]:
-                    if maker_emp_code in rule.get("initiator_ids", []):
-                        approver_id = rule.get("approver")
-                        break
-            if not approver_id:
-                approver_id = head_config.get("approver")
-                
-        if approver_id == hod_id:
+        _, approver_email = resolve_route(item.module, item.initiatorEmail, item.employeeHome, config)
+        if approver_email and approver_email.lower().strip() == email:
             filtered_items.append(item)
             
     if not filtered_items:
@@ -930,19 +899,16 @@ async def return_to_hrbp(db: Session = Depends(get_db), user: dict = Depends(req
     comments = filtered_items[0].hodComments or "No comments"
     active_module = filtered_items[0].module or "Payroll"
     
-    # Check if HRBP is NA for this module
-    head_config = next((h for h in config.get("earning_heads", []) if h["name"] == active_module), None)
-    has_hrbp = True
-    if head_config and head_config.get("hrbp") == "NA":
-        has_hrbp = False
-        
-    next_status = "HRBP" if has_hrbp else "MAKER"
-    
     notified_emails = set()
     for item in filtered_items:
+        hrbp_email, _ = resolve_route(item.module, item.initiatorEmail, item.employeeHome, config)
+        has_hrbp = hrbp_email and hrbp_email != "NA"
+        
+        next_status = "HRBP" if has_hrbp else "MAKER"
         item.status = next_status
-        history = list(item.history) if item.history else []
+        
         action_text = "Rejected by HOD" if has_hrbp else "Rejected by HOD (Returned directly to Maker)"
+        history = list(item.history) if item.history else []
         history.append({
             "action": action_text,
             "user": hod_name,
@@ -952,12 +918,8 @@ async def return_to_hrbp(db: Session = Depends(get_db), user: dict = Depends(req
         item.history = history
         
         if has_hrbp:
-            # HRBPs to notify
-            hrbp_ids = head_config.get("hrbp", []) if head_config else []
-            for h_user in [u for u in config.get("users", []) if u["employee_id"] in hrbp_ids]:
-                notified_emails.add(h_user["email"])
+            notified_emails.add(hrbp_email)
         else:
-            # Maker to notify
             if item.initiatorEmail:
                 notified_emails.add(item.initiatorEmail)
                 
@@ -971,7 +933,7 @@ async def return_to_hrbp(db: Session = Depends(get_db), user: dict = Depends(req
     db.commit()
     
     for notify_email in notified_emails:
-        create_notification(db, notify_email, f"A {active_module} sheet was returned by HOD {hod_name}. Reason: {comments}")
+        create_notification(db, notify_email, f"A {active_module} item was returned by HOD {hod_name}. Reason: {comments}")
         
     return {"message": f"Returned to {next_status}"}
 

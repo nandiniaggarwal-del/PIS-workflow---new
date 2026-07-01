@@ -19,7 +19,7 @@ export default function LoginScreen() {
         { email }
       );
 
-      localStorage.setItem(
+      sessionStorage.setItem(
         "user",
         JSON.stringify(response.data)
       );

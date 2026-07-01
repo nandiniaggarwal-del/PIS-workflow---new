@@ -18,7 +18,7 @@ const timeline = [
   "Payroll",
 ];
 export default function HRBPScreen() {
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const user = JSON.parse(sessionStorage.getItem("user") || "{}");
   const [modules, setModules] = useState([]);
   const [rows, setRows] = useState([]);
   const [activeModule, setActiveModule] = useState("");
@@ -29,7 +29,7 @@ export default function HRBPScreen() {
   const [history, setHistory] = useState([]);
 
   useEffect(() => {
-    const storedUser = JSON.parse(localStorage.getItem("user"));
+    const storedUser = JSON.parse(sessionStorage.getItem("user"));
     if (!storedUser || storedUser.role.toLowerCase() !== "hrbp") {
       alert("Access Denied: HRBP role required.");
       if (storedUser) {
@@ -91,7 +91,7 @@ export default function HRBPScreen() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("user");
+    sessionStorage.removeItem("user");
     navigate("/");
   };
 

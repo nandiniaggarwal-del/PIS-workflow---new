@@ -29,7 +29,7 @@ export default function AdminScreen() {
   const [rawJson, setRawJson] = useState("");
 
   const navigate = useNavigate();
-  const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
+  const currentUser = JSON.parse(sessionStorage.getItem("user") || "{}");
 
   useEffect(() => {
     // Route guard check
@@ -76,7 +76,7 @@ export default function AdminScreen() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("user");
+    sessionStorage.removeItem("user");
     navigate("/");
   };
 

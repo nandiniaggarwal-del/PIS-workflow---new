@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 
 export default function PayrollScreen() {
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const user = JSON.parse(sessionStorage.getItem("user") || "{}");
   const [modules, setModules] = useState([]);
   const [rows, setRows] = useState([]);
   const [activeModule, setActiveModule] = useState("");
@@ -31,7 +31,7 @@ export default function PayrollScreen() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const storedUser = JSON.parse(localStorage.getItem("user"));
+    const storedUser = JSON.parse(sessionStorage.getItem("user"));
     if (!storedUser || storedUser.role.toLowerCase() !== "payroll") {
       alert("Access Denied: Payroll role required.");
       if (storedUser) {
@@ -124,7 +124,7 @@ export default function PayrollScreen() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("user");
+    sessionStorage.removeItem("user");
     navigate("/");
   };
 

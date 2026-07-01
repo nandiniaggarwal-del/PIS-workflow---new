@@ -21,7 +21,7 @@ const timeline = [
   "Payroll",
 ];
 const MakerScreen = () => {
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const user = JSON.parse(sessionStorage.getItem("user") || "{}");
   const [modules, setModules] = useState([]);
   const [rows, setRows] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -29,9 +29,9 @@ const MakerScreen = () => {
   const [notifications, setNotifications] = useState([]);
   const navigate = useNavigate();
   const [history, setHistory] = useState([]);
-
+ 
   useEffect(() => {
-    const storedUser = JSON.parse(localStorage.getItem("user"));
+    const storedUser = JSON.parse(sessionStorage.getItem("user"));
     if (!storedUser || storedUser.role.toLowerCase() !== "maker") {
       alert("Access Denied: Maker role required.");
       if (storedUser) {
@@ -51,7 +51,7 @@ const MakerScreen = () => {
     fetchWorkflowHistory();
     fetchNotifications();
   }, []);
-
+ 
   const fetchConfig = async () => {
     try {
       const response = await API.get("/workflow/config");
@@ -73,7 +73,7 @@ const MakerScreen = () => {
       console.log("Failed to fetch configuration:", error);
     }
   };
-
+ 
   const fetchNotifications = async () => {
     try {
       const response = await API.get("/notifications");
@@ -82,7 +82,7 @@ const MakerScreen = () => {
       console.log("Failed to fetch notifications:", error);
     }
   };
-
+ 
   const handleMarkNotificationsRead = async () => {
     try {
       await API.post("/notifications/mark-read");
@@ -91,9 +91,9 @@ const MakerScreen = () => {
       console.log(error);
     }
   };
-
+ 
   const handleLogout = () => {
-    localStorage.removeItem("user");
+    sessionStorage.removeItem("user");
     navigate("/");
   };
 
