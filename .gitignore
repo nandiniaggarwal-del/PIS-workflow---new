@@ -52,3 +52,6 @@ payroll-backend/data/otpStore.json
 **/data/otpStore.json
 **/uploads/
 
+# Local Podman Environment
+.podman_env/
+
