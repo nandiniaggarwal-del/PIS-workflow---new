@@ -54,11 +54,11 @@ def test_workflow_routing():
             "history": []
         }
     ]
-    save_resp = client.post("/api/workflow/save-maker", json=save_payload, headers=rupali_headers)
+    save_resp = client.post("/api/workflow/save-maker?module=REFERRAL%20BONUS&employeeHome=ALL", json=save_payload, headers=rupali_headers)
     assert save_resp.status_code == 200
 
     # 3. Submit sheet to Approver (should bypass HRBP and route conditionally to Rashi Agarwal - 1MG5998)
-    submit_resp = client.get("/api/workflow/submit-hrbp", headers=rupali_headers)
+    submit_resp = client.get("/api/workflow/submit-hrbp?module=REFERRAL%20BONUS&employeeHome=ALL", headers=rupali_headers)
     assert submit_resp.status_code == 200
     assert "Sent directly to Approver" in submit_resp.json()["message"]
 
@@ -71,7 +71,7 @@ def test_workflow_routing():
     rashi_token = rashi_data["token"]
     rashi_headers = {"Authorization": f"Bearer {rashi_token}"}
 
-    hod_queue_resp = client.get("/api/workflow/hod", headers=rashi_headers)
+    hod_queue_resp = client.get("/api/workflow/hod?module=REFERRAL%20BONUS&employeeHome=ALL", headers=rashi_headers)
     assert hod_queue_resp.status_code == 200
     hod_queue = hod_queue_resp.json()
     
@@ -113,11 +113,11 @@ def test_workflow_routing():
             "history": []
         }
     ]
-    save_resp2 = client.post("/api/workflow/save-maker", json=save_payload_minakshi, headers=minakshi_headers)
+    save_resp2 = client.post("/api/workflow/save-maker?module=REFERRAL%20BONUS&employeeHome=ALL", json=save_payload_minakshi, headers=minakshi_headers)
     assert save_resp2.status_code == 200
 
     # Submit sheet to Approver (should bypass HRBP and route conditionally to Khwaja Mohd Azeem - 1MG6318)
-    submit_resp2 = client.get("/api/workflow/submit-hrbp", headers=minakshi_headers)
+    submit_resp2 = client.get("/api/workflow/submit-hrbp?module=REFERRAL%20BONUS&employeeHome=ALL", headers=minakshi_headers)
     assert submit_resp2.status_code == 200
     assert "Sent directly to Approver" in submit_resp2.json()["message"]
 
@@ -128,7 +128,7 @@ def test_workflow_routing():
     khwaja_token = khwaja_data["token"]
     khwaja_headers = {"Authorization": f"Bearer {khwaja_token}"}
 
-    hod_queue_resp2 = client.get("/api/workflow/hod", headers=khwaja_headers)
+    hod_queue_resp2 = client.get("/api/workflow/hod?module=REFERRAL%20BONUS&employeeHome=ALL", headers=khwaja_headers)
     assert hod_queue_resp2.status_code == 200
     hod_queue2 = hod_queue_resp2.json()
 
@@ -138,7 +138,7 @@ def test_workflow_routing():
     assert minakshi_items_in_khwaja_queue[0]["amount"] == "10000"
 
     # 8. Approve sheet in Rashi's queue (from step 4) to send it to Payroll stage
-    approve_resp = client.get("/api/workflow/submit-payroll", headers=rashi_headers)
+    approve_resp = client.get("/api/workflow/submit-payroll?module=REFERRAL%20BONUS&employeeHome=ALL", headers=rashi_headers)
     assert approve_resp.status_code == 200
     assert approve_resp.json()["message"] == "Sent to Payroll"
 

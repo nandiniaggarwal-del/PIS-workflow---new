@@ -22,6 +22,7 @@ export default function HRBPScreen() {
   const [modules, setModules] = useState([]);
   const [rows, setRows] = useState([]);
   const [activeModule, setActiveModule] = useState("");
+  const [activeEmployeeHome, setActiveEmployeeHome] = useState("");
   const [hrbpComments, setHrbpComments] = useState("");
   const [flaggedColumns, setFlaggedColumns] = useState([]);
   const [notifications, setNotifications] = useState([]);
@@ -45,27 +46,41 @@ export default function HRBPScreen() {
       return;
     }
     fetchConfig();
-    fetchPayrollData();
     fetchWorkflowHistory();
     fetchNotifications();
   }, []);
+
+  useEffect(() => {
+    if (activeModule && activeEmployeeHome) {
+      fetchPayrollData(activeModule, activeEmployeeHome);
+    }
+  }, [activeModule, activeEmployeeHome]);
+
+  useEffect(() => {
+    if (activeModule && modules.length > 0) {
+      const activeHead = modules.find(m => m.name === activeModule);
+      if (activeHead && activeHead.allowed_homes && activeHead.allowed_homes.length > 0) {
+        if (!activeHead.allowed_homes.includes(activeEmployeeHome)) {
+          setActiveEmployeeHome(activeHead.allowed_homes[0]);
+        }
+      } else {
+        setActiveEmployeeHome("ALL");
+      }
+    }
+  }, [activeModule, modules]);
 
   const fetchConfig = async () => {
     try {
       const response = await API.get("/workflow/config");
       const allHeads = response.data.earning_heads;
-      const currentUser = response.data.currentUser;
-      
-      let filtered = allHeads;
-      if (currentUser && currentUser.allowed_modules && currentUser.allowed_modules.length > 0) {
-        if (!currentUser.allowed_modules.includes("*")) {
-          filtered = allHeads.filter(head => currentUser.allowed_modules.includes(head.name));
+      setModules(allHeads);
+      if (allHeads.length > 0) {
+        setActiveModule(allHeads[0].name);
+        if (allHeads[0].allowed_homes && allHeads[0].allowed_homes.length > 0) {
+          setActiveEmployeeHome(allHeads[0].allowed_homes[0]);
+        } else {
+          setActiveEmployeeHome("ALL");
         }
-      }
-      
-      setModules(filtered);
-      if (filtered.length > 0) {
-        setActiveModule(filtered[0].name);
       }
     } catch (error) {
       console.log("Failed to fetch configuration:", error);
@@ -95,6 +110,15 @@ export default function HRBPScreen() {
     navigate("/");
   };
 
+  const switchRole = (newRole) => {
+    const updatedUser = { ...user, role: newRole };
+    sessionStorage.setItem("user", JSON.stringify(updatedUser));
+    if (newRole === "maker") navigate("/maker");
+    else if (newRole === "hrbp") navigate("/hrbp");
+    else if (newRole === "hod") navigate("/hod");
+    window.location.reload();
+  };
+
   const fetchWorkflowHistory = async () => {
     try {
       const response = await API.get("/workflow/history");
@@ -104,10 +128,12 @@ export default function HRBPScreen() {
     }
   };
 
-  const fetchPayrollData = async () => {
+  const fetchPayrollData = async (moduleName, homeName) => {
+    const mod = moduleName || activeModule;
+    const home = homeName || activeEmployeeHome;
+    if (!mod || !home) return;
     try {
-      const response = await API.get("/workflow/hrbp");
-
+      const response = await API.get(`/workflow/hrbp?module=${encodeURIComponent(mod)}&employeeHome=${encodeURIComponent(home)}`);
       setRows(response.data);
     } catch (error) {
       console.log(error);
@@ -131,7 +157,7 @@ export default function HRBPScreen() {
   const filteredRows =
   rows.filter(
     row =>
-      row.module === activeModule
+      row.module === activeModule && row.employeeHome === activeEmployeeHome
   );
 
   const totalAmount = filteredRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
@@ -344,10 +370,24 @@ export default function HRBPScreen() {
                     {user?.name}
                   </p>
                   <p className="text-[11px] text-[#888] mt-1">
-                    HRBP
+                    {user?.role?.toUpperCase()}
                   </p>
                 </div>
                 <div className="flex flex-col text-[12px] bg-white text-left">
+                  {user?.roles && user.roles.length > 1 && (
+                    <div className="border-b border-[#F5F1EB] bg-[#FAF8F5] text-left">
+                      <p className="px-4 pt-2 text-[9px] text-gray-400 font-bold uppercase tracking-wider">Switch Role</p>
+                      {user.roles.map(r => r.toLowerCase() !== user.role?.toLowerCase() && (
+                        <div 
+                          key={r}
+                          onClick={() => switchRole(r.toLowerCase())} 
+                          className="px-4 py-2 hover:bg-[#FAF7F2] cursor-pointer text-[#0E2A47] font-medium"
+                        >
+                          {r.toUpperCase()} View
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <div 
                     onClick={() => alert(`Profile Details:\n\nName: ${user?.name || "User"}\nEmail: ${user?.email || "N/A"}\nEmployee ID: ${user?.employee_id || "N/A"}\nRole: ${user?.role || "N/A"}`)}
                     className="px-4 py-3 hover:bg-[#FAF7F2] cursor-pointer border-b border-[#F5F1EB]"
@@ -434,6 +474,23 @@ export default function HRBPScreen() {
             <p className="text-[12px] text-[#777]">
               Review submissions from Maker (Business SPOC)
             </p>
+            {modules.find(m => m.name === activeModule)?.allowed_homes?.length > 0 && (
+              <div className="flex gap-2 mt-4 flex-wrap">
+                {modules.find(m => m.name === activeModule).allowed_homes.map(home => (
+                  <button
+                    key={home}
+                    onClick={() => setActiveEmployeeHome(home)}
+                    className={`h-[30px] px-4 rounded-xl text-[11px] font-semibold transition-all ${
+                      activeEmployeeHome === home
+                        ? "bg-black text-white"
+                        : "bg-white border border-[#E7E3DC] text-[#666] hover:bg-[#F26B5B] hover:text-white"
+                    }`}
+                  >
+                    {home}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* SUMMARY WIDGETS */}
@@ -549,6 +606,8 @@ onChange={(e) =>
       {
         comments: hrbpComments,
         flaggedColumns,
+        module: activeModule,
+        employeeHome: activeEmployeeHome
       }
     );
 
@@ -616,6 +675,7 @@ onChange={(e) =>
               <thead className="bg-[#FAF7F2]">
                 <tr>
                   <th className="p-3">S No</th>
+                  <th className="p-3">Initiator</th>
                   <th className="p-3">Employee Code</th>
                   <th className="p-3">Pay Component</th>
                   <th className="p-3">Payment Frequency</th>
@@ -641,6 +701,10 @@ onChange={(e) =>
         {index + 1}
       </td>
 
+      <td className="p-3 text-[12px] font-medium text-gray-600">
+        {row.initiatorEmail ? row.initiatorEmail.split("@")[0] : "System"}
+      </td>
+
       <td className="p-3 text-[12px]">
         {row.empCode}
       </td>
@@ -654,11 +718,11 @@ onChange={(e) =>
       </td>
 
       <td className="p-3 text-[12px]">
-        {row.designation}
+        {row.effectiveFrom || row.designation}
       </td>
 
       <td className="p-3 text-[12px]">
-        {row.employeeHome}
+        {row.effectiveTo || (!isNaN(Date.parse(row.employeeHome)) ? row.employeeHome : "")}
       </td>
 
       <td className="p-3 text-[12px]">
@@ -695,34 +759,29 @@ onChange={(e) =>
 
 <button
   onClick={async () => {
-
     try {
       await API.post(
         "/workflow/save-hrbp-review",
         {
           comments: hrbpComments,
           flaggedColumns,
+          module: activeModule,
+          employeeHome: activeEmployeeHome
         }
       );
 
-      const response =
-        await API.get(
-          "/workflow/return-maker"
-        );
-
-      alert(
-        response.data.message
+      const response = await API.get(
+        `/workflow/return-maker?module=${encodeURIComponent(activeModule)}&employeeHome=${encodeURIComponent(activeEmployeeHome)}`
       );
 
-      fetchPayrollData();
+      alert(response.data.message);
+
+      fetchPayrollData(activeModule, activeEmployeeHome);
       fetchWorkflowHistory();
 
     } catch (error) {
-
       console.log(error);
-
     }
-
   }}
   className="
     h-[36px]
@@ -738,16 +797,23 @@ onChange={(e) =>
               <button
                 onClick={async () => {
                   try {
-                    const response =
-                      await API.get(
-                        "/workflow/submit-hod"
-                      );
-
-                    alert(
-                      response.data.message
+                    await API.post(
+                      "/workflow/save-hrbp-review",
+                      {
+                        comments: hrbpComments,
+                        flaggedColumns,
+                        module: activeModule,
+                        employeeHome: activeEmployeeHome
+                      }
                     );
 
-                    fetchPayrollData();
+                    const response = await API.get(
+                      `/workflow/submit-hod?module=${encodeURIComponent(activeModule)}&employeeHome=${encodeURIComponent(activeEmployeeHome)}`
+                    );
+
+                    alert(response.data.message);
+
+                    fetchPayrollData(activeModule, activeEmployeeHome);
                     fetchWorkflowHistory();
                   } catch (error) {
                     console.log(error);

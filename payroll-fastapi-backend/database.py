@@ -1,8 +1,10 @@
 import os
+from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 # Load environment variable database configuration
+load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 # Resolve absolute path for local data directory

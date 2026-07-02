@@ -1,6 +1,12 @@
 {
   "users": [
     {
+      "email": "nandini.aggarwal@1mg.com",
+      "name": "Nandini Aggarwal",
+      "employee_id": "NANDINI_AGGC",
+      "role": "maker"
+    },
+    {
       "email": "kanika.katyal@1mg.com",
       "name": "Kanika Katyal",
       "employee_id": "1MG5051",
@@ -53,7 +59,9 @@
       "name": "IT Team",
       "employee_id": "IT_TEAM",
       "role": "maker",
-      "allowed_modules": ["*"]
+      "allowed_modules": [
+        "*"
+      ]
     },
     {
       "email": "business.spoc@1mg.com",
@@ -120,7 +128,9 @@
       "name": "IT HOD",
       "employee_id": "IT_HOD",
       "role": "hod",
-      "allowed_modules": ["*"]
+      "allowed_modules": [
+        "*"
+      ]
     },
     {
       "email": "business.hod@1mg.com",
@@ -133,21 +143,297 @@
       "name": "Payroll Admin",
       "employee_id": "PAYROLL",
       "role": "payroll",
-      "allowed_modules": ["*"]
+      "allowed_modules": [
+        "*"
+      ]
     },
     {
       "email": "amit.khatri@1mg.com",
       "name": "Amit Khatri",
       "employee_id": "1MG_ADMIN",
       "role": "admin",
-      "allowed_modules": ["*"]
+      "allowed_modules": [
+        "*"
+      ]
+    },
+    {
+      "email": "amit.kumar@1mg.com",
+      "name": "Amit Kumar",
+      "employee_id": "AMIT_KUMAR",
+      "role": "hod"
+    },
+    {
+      "email": "tanya.agrawal@1mg.com",
+      "name": "Tanya Agrawal",
+      "employee_id": "TANYA_AGRAWAL",
+      "role": "maker"
+    },
+    {
+      "email": "nikhil.doegar@1mg.com",
+      "name": "Nikhil Doegar",
+      "employee_id": "NIKHIL_DOEGAR",
+      "role": "hod"
+    },
+    {
+      "email": "divya.jain@1mg.com",
+      "name": "Divya Jain",
+      "employee_id": "DIVYA_JAIN",
+      "role": "maker"
+    },
+    {
+      "email": "prateek.verma@1mg.com",
+      "name": "Prateek Verma",
+      "employee_id": "PRATEEK_VERMA",
+      "role": "hod"
+    },
+    {
+      "email": "shanmugam.k@1mg.com",
+      "name": "Shanmugam K",
+      "employee_id": "SHANMUGAM_K",
+      "role": "hod"
+    },
+    {
+      "email": "ketan.bhatia@1mg.com",
+      "name": "Ketan Bhatia",
+      "employee_id": "KETAN_BHATIA",
+      "role": "hod"
+    },
+    {
+      "email": "manjunath.somasekhararadhya@1mg.com",
+      "name": "Manjunath Somasekhararadhya",
+      "employee_id": "MANJUNATH_SOMASEKHARARADHYA",
+      "role": "hod"
+    },
+    {
+      "email": "tanmay.saksena@1mg.com",
+      "name": "Tanmay Saksena",
+      "employee_id": "TANMAY_SAKSENA",
+      "role": "hod"
+    },
+    {
+      "email": "shikhar.saxena@1mg.com",
+      "name": "Shikhar Saxena",
+      "employee_id": "SHIKHAR_SAXENA",
+      "role": "maker"
+    },
+    {
+      "email": "devinder.ahluwalia@1mg.com",
+      "name": "Devinder Ahluwalia",
+      "employee_id": "DEVINDER_AHLUWALIA",
+      "role": "hod"
+    },
+    {
+      "email": "anubhav.mehrotra@1mg.com",
+      "name": "Anubhav Mehrotra",
+      "employee_id": "ANUBHAV_MEHROTRA",
+      "role": "hod"
+    },
+    {
+      "email": "santosh.pawar@1mg.com",
+      "name": "Santosh Pawar",
+      "employee_id": "SANTOSH_PAWAR",
+      "role": "maker"
+    },
+    {
+      "email": "amit.malik@1mg.com",
+      "name": "Amit Malik",
+      "employee_id": "AMIT_MALIK",
+      "role": "hod"
+    },
+    {
+      "email": "debapriya.chakraborty@1mg.com",
+      "name": "Debapriya Chakraborty",
+      "employee_id": "DEBAPRIYA_CHAKRABORTY",
+      "role": "maker"
+    },
+    {
+      "email": "anushka.agarwal@1mg.com",
+      "name": "Anushka Agarwal",
+      "employee_id": "ANUSHKA_AGARWAL",
+      "role": "hod"
+    },
+    {
+      "email": "manisha.mishra@1mg.com",
+      "name": "Manisha Mishra",
+      "employee_id": "MANISHA_MISHRA",
+      "role": "hod"
+    },
+    {
+      "email": "rahul.nayar@1mg.com",
+      "name": "Rahul Nayar",
+      "employee_id": "RAHUL_NAYAR",
+      "role": "maker"
+    },
+    {
+      "email": "deepanshu.kumar@1mg.com",
+      "name": "Deepanshu Kumar",
+      "employee_id": "DEEPANSHU_KUMAR",
+      "role": "maker"
+    },
+    {
+      "email": "santanu.ghosh@1mg.com",
+      "name": "Santanu Ghosh",
+      "employee_id": "SANTANU_GHOSH",
+      "role": "hod"
+    },
+    {
+      "email": "yatharth.bhargova@1mg.com",
+      "name": "Yatharth Bhargova",
+      "employee_id": "YATHARTH_BHARGOVA",
+      "role": "hod"
+    },
+    {
+      "email": "deepa.chadha@1mg.com",
+      "name": "Deepa Chadha",
+      "employee_id": "DEEPA_CHADHA",
+      "role": "hod"
+    },
+    {
+      "email": "meetu.garg@1mg.com",
+      "name": "Meetu Garg",
+      "employee_id": "MEETU_GARG",
+      "role": "hod"
+    },
+    {
+      "email": "karan.chopra@1mg.com",
+      "name": "Karan Chopra",
+      "employee_id": "KARAN_CHOPRA",
+      "role": "hod"
+    },
+    {
+      "email": "dr.sharma@1mg.com",
+      "name": "Dr Sharma",
+      "employee_id": "DR_SHARMA",
+      "role": "hod"
+    },
+    {
+      "email": "vipul.jain@1mg.com",
+      "name": "Vipul Jain",
+      "employee_id": "VIPUL_JAIN",
+      "role": "maker"
+    },
+    {
+      "email": "prashant.nag@1mg.com",
+      "name": "Prashant Nag",
+      "employee_id": "PRASHANT_NAG",
+      "role": "hod"
+    },
+    {
+      "email": "bijoy.sahoo@1mg.com",
+      "name": "Bijoy Sahoo",
+      "employee_id": "BIJOY_SAHOO",
+      "role": "maker"
+    },
+    {
+      "email": "shubham@1mg.com",
+      "name": "Shubham",
+      "employee_id": "SHUBHAM",
+      "role": "maker"
+    },
+    {
+      "email": "tanvi.arora@1mg.com",
+      "name": "Tanvi Arora",
+      "employee_id": "TANVI_ARORA",
+      "role": "maker"
+    },
+    {
+      "email": "kapil.kumar@1mg.com",
+      "name": "Kapil Kumar",
+      "employee_id": "KAPIL_KUMAR",
+      "role": "maker"
+    },
+    {
+      "email": "prakash.singh@1mg.com",
+      "name": "Prakash Singh",
+      "employee_id": "PRAKASH_SINGH",
+      "role": "maker"
+    },
+    {
+      "email": "kirti.bodra@1mg.com",
+      "name": "Kirti Bodra",
+      "employee_id": "KIRTI_BODRA",
+      "role": "maker"
+    },
+    {
+      "email": "medha.saxena@1mg.com",
+      "name": "Medha Saxena",
+      "employee_id": "MEDHA_SAXENA",
+      "role": "maker"
+    },
+    {
+      "email": "rohit.kumar@1mg.com",
+      "name": "Rohit Kumar",
+      "employee_id": "ROHIT_KUMAR",
+      "role": "maker"
+    },
+    {
+      "email": "ankur.gupta@1mg.com",
+      "name": "Ankur Gupta",
+      "employee_id": "ANKUR_GUPTA",
+      "role": "maker"
+    },
+    {
+      "email": "rohan.jha@1mg.com",
+      "name": "Rohan Jha",
+      "employee_id": "ROHAN_JHA",
+      "role": "maker"
+    },
+    {
+      "email": "ajay.madaan@1mg.com",
+      "name": "Ajay Madaan",
+      "employee_id": "AJAY_MADAAN",
+      "role": "maker"
+    },
+    {
+      "email": "parmee.gala@1mg.com",
+      "name": "Parmee Gala",
+      "employee_id": "PARMEE_GALA",
+      "role": "maker"
+    },
+    {
+      "email": "ishan.chakraborty@1mg.com",
+      "name": "Ishan Chakraborty",
+      "employee_id": "ISHAN_CHAKRABORTY",
+      "role": "maker"
+    },
+    {
+      "email": "deblina.dash@1mg.com",
+      "name": "Deblina Dash",
+      "employee_id": "DEBLINA_DASH",
+      "role": "maker"
+    },
+    {
+      "email": "sonu.ranjan@1mg.com",
+      "name": "Sonu Ranjan",
+      "employee_id": "SONU_RANJAN",
+      "role": "maker"
+    },
+    {
+      "email": "nishant.jaiswal@1mg.com",
+      "name": "Nishant Jaiswal",
+      "employee_id": "NISHANT_JAISWAL",
+      "role": "maker"
+    },
+    {
+      "email": "mahipal.singh@1mg.com",
+      "name": "Mahipal Singh",
+      "employee_id": "MAHIPAL_SINGH",
+      "role": "maker"
+    },
+    {
+      "email": "abhijeet.sen@1mg.com",
+      "name": "Abhijeet Sen",
+      "employee_id": "ABHIJEET_SEN",
+      "role": "maker"
     }
   ],
   "earning_heads": [
     {
       "name": "RETENTION BONUS",
       "employee_home": "ALL",
-      "initiators": ["1MG5051"],
+      "initiators": [
+        "1MG5051"
+      ],
       "hrbp": "NA",
       "approver": "1MG5998",
       "input_type": "amount"
@@ -155,7 +441,9 @@
     {
       "name": "VARIABLE PAY",
       "employee_home": "ALL",
-      "initiators": ["1MG5051"],
+      "initiators": [
+        "1MG5051"
+      ],
       "hrbp": "NA",
       "approver": "1MG5998",
       "input_type": "amount"
@@ -163,7 +451,9 @@
     {
       "name": "ONE TIME BONUS",
       "employee_home": "ALL",
-      "initiators": ["1MG5051"],
+      "initiators": [
+        "1MG5051"
+      ],
       "hrbp": "NA",
       "approver": "1MG5998",
       "input_type": "amount"
@@ -171,7 +461,9 @@
     {
       "name": "IT ASSESTS RECOVERY",
       "employee_home": "ALL",
-      "initiators": ["IT_TEAM"],
+      "initiators": [
+        "IT_TEAM"
+      ],
       "hrbp": "NA",
       "approver": "IT_HOD",
       "input_type": "amount"
@@ -179,103 +471,178 @@
     {
       "name": "DAY CARE DEDUCTION",
       "employee_home": "ALL",
-      "initiators": ["1MGHC3148"],
-      "hrbp": ["1MG_HRBP_1"],
+      "initiators": [
+        "1MGHC3148"
+      ],
+      "hrbp": [
+        "1MG_HRBP_1"
+      ],
       "approver": "1MG2681",
       "input_type": "amount"
     },
     {
       "name": "REFYNE_ADVANCE",
       "employee_home": "ALL",
-      "initiators": ["1MGHC3148"],
-      "hrbp": ["1MG_HRBP_1"],
+      "initiators": [
+        "1MGHC3148"
+      ],
+      "hrbp": [
+        "1MG_HRBP_1"
+      ],
       "approver": "1MG2681",
       "input_type": "amount"
     },
     {
       "name": "LOAN AND ADVANCE",
       "employee_home": "ALL",
-      "initiators": ["1MGHC3148"],
-      "hrbp": ["1MG_HRBP_1"],
+      "initiators": [
+        "1MGHC3148"
+      ],
+      "hrbp": [
+        "1MG_HRBP_1"
+      ],
       "approver": "1MG2681",
       "input_type": "amount"
     },
     {
       "name": "LOAN DEDUCTION",
       "employee_home": "ALL",
-      "initiators": ["1MGHC3148"],
-      "hrbp": ["1MG_HRBP_1"],
+      "initiators": [
+        "1MGHC3148"
+      ],
+      "hrbp": [
+        "1MG_HRBP_1"
+      ],
       "approver": "1MG2681",
       "input_type": "amount"
     },
     {
       "name": "DURGA POOJA BONUS",
       "employee_home": "ALL",
-      "initiators": ["1MGHC3148"],
-      "hrbp": ["1MG_HRBP_1"],
+      "initiators": [
+        "1MGHC3148"
+      ],
+      "hrbp": [
+        "1MG_HRBP_1"
+      ],
       "approver": "1MG2681",
       "input_type": "amount"
     },
     {
       "name": "OVERTIME HOURS",
       "employee_home": "Employee Home Wise",
-      "initiators": ["BUSINESS_SPOC"],
-      "hrbp": ["1MG_HRBP_2", "1MG_HRBP_3", "1MG_HRBP_4", "1MG_HRBP_5"],
+      "initiators": [
+        "BUSINESS_SPOC"
+      ],
+      "hrbp": [
+        "1MG_HRBP_2",
+        "1MG_HRBP_3",
+        "1MG_HRBP_4",
+        "1MG_HRBP_5"
+      ],
       "approver": "BUSINESS_HOD",
       "input_type": "hours"
     },
     {
       "name": "FESTIVAL HOLIDAY DAYS",
       "employee_home": "Employee Home Wise",
-      "initiators": ["BUSINESS_SPOC"],
-      "hrbp": ["1MG_HRBP_2", "1MG_HRBP_3", "1MG_HRBP_4", "1MG_HRBP_5"],
+      "initiators": [
+        "BUSINESS_SPOC"
+      ],
+      "hrbp": [
+        "1MG_HRBP_2",
+        "1MG_HRBP_3",
+        "1MG_HRBP_4",
+        "1MG_HRBP_5"
+      ],
       "approver": "BUSINESS_HOD",
       "input_type": "days"
     },
     {
       "name": "NATIONAL HOLIDAY DAYS",
       "employee_home": "Employee Home Wise",
-      "initiators": ["BUSINESS_SPOC"],
-      "hrbp": ["1MG_HRBP_2", "1MG_HRBP_3", "1MG_HRBP_4", "1MG_HRBP_5"],
+      "initiators": [
+        "BUSINESS_SPOC"
+      ],
+      "hrbp": [
+        "1MG_HRBP_2",
+        "1MG_HRBP_3",
+        "1MG_HRBP_4",
+        "1MG_HRBP_5"
+      ],
       "approver": "BUSINESS_HOD",
       "input_type": "days"
     },
     {
       "name": "OTHER EARNING",
       "employee_home": "Employee Home Wise",
-      "initiators": ["BUSINESS_SPOC"],
-      "hrbp": ["1MG_HRBP_2", "1MG_HRBP_3", "1MG_HRBP_4", "1MG_HRBP_5"],
+      "initiators": [
+        "BUSINESS_SPOC"
+      ],
+      "hrbp": [
+        "1MG_HRBP_2",
+        "1MG_HRBP_3",
+        "1MG_HRBP_4",
+        "1MG_HRBP_5"
+      ],
       "approver": "BUSINESS_HOD",
       "input_type": "amount"
     },
     {
       "name": "INCENTIVE",
       "employee_home": "Employee Home Wise",
-      "initiators": ["BUSINESS_SPOC"],
-      "hrbp": ["1MG_HRBP_2", "1MG_HRBP_3", "1MG_HRBP_4", "1MG_HRBP_5"],
+      "initiators": [
+        "BUSINESS_SPOC"
+      ],
+      "hrbp": [
+        "1MG_HRBP_2",
+        "1MG_HRBP_3",
+        "1MG_HRBP_4",
+        "1MG_HRBP_5"
+      ],
       "approver": "BUSINESS_HOD",
       "input_type": "amount"
     },
     {
       "name": "OTHER DEDUCTION",
       "employee_home": "Employee Home Wise",
-      "initiators": ["BUSINESS_SPOC"],
-      "hrbp": ["1MG_HRBP_2", "1MG_HRBP_3", "1MG_HRBP_4", "1MG_HRBP_5"],
+      "initiators": [
+        "BUSINESS_SPOC"
+      ],
+      "hrbp": [
+        "1MG_HRBP_2",
+        "1MG_HRBP_3",
+        "1MG_HRBP_4",
+        "1MG_HRBP_5"
+      ],
       "approver": "BUSINESS_HOD",
       "input_type": "amount"
     },
     {
       "name": "REFERRAL BONUS",
       "employee_home": "ALL",
-      "initiators": ["1MG5466", "1MG6284", "1MG6270", "1MG6303", "1MGHC4601"],
+      "initiators": [
+        "1MG5466",
+        "1MG6284",
+        "1MG6270",
+        "1MG6303",
+        "1MGHC4601"
+      ],
       "hrbp": "NA",
       "routing_rules": [
         {
-          "initiator_ids": ["1MG5466", "1MG6284"],
+          "initiator_ids": [
+            "1MG5466",
+            "1MG6284"
+          ],
           "approver": "1MG6318"
         },
         {
-          "initiator_ids": ["1MG6270", "1MG6303", "1MGHC4601"],
+          "initiator_ids": [
+            "1MG6270",
+            "1MG6303",
+            "1MGHC4601"
+          ],
           "approver": "1MG5998"
         }
       ],
@@ -284,15 +651,28 @@
     {
       "name": "JOINING BONUS",
       "employee_home": "ALL",
-      "initiators": ["1MG5466", "1MG6284", "1MG6270", "1MG6303", "1MGHC4601"],
+      "initiators": [
+        "1MG5466",
+        "1MG6284",
+        "1MG6270",
+        "1MG6303",
+        "1MGHC4601"
+      ],
       "hrbp": "NA",
       "routing_rules": [
         {
-          "initiator_ids": ["1MG5466", "1MG6284"],
+          "initiator_ids": [
+            "1MG5466",
+            "1MG6284"
+          ],
           "approver": "1MG6318"
         },
         {
-          "initiator_ids": ["1MG6270", "1MG6303", "1MGHC4601"],
+          "initiator_ids": [
+            "1MG6270",
+            "1MG6303",
+            "1MGHC4601"
+          ],
           "approver": "1MG5998"
         }
       ],
@@ -301,15 +681,28 @@
     {
       "name": "NOTICE PERIOD BUYOUT",
       "employee_home": "ALL",
-      "initiators": ["1MG5466", "1MG6284", "1MG6270", "1MG6303", "1MGHC4601"],
+      "initiators": [
+        "1MG5466",
+        "1MG6284",
+        "1MG6270",
+        "1MG6303",
+        "1MGHC4601"
+      ],
       "hrbp": "NA",
       "routing_rules": [
         {
-          "initiator_ids": ["1MG5466", "1MG6284"],
+          "initiator_ids": [
+            "1MG5466",
+            "1MG6284"
+          ],
           "approver": "1MG6318"
         },
         {
-          "initiator_ids": ["1MG6270", "1MG6303", "1MGHC4601"],
+          "initiator_ids": [
+            "1MG6270",
+            "1MG6303",
+            "1MGHC4601"
+          ],
           "approver": "1MG5998"
         }
       ],
@@ -318,42 +711,70 @@
     {
       "name": "WEEKLY INCENTIVE 1",
       "employee_home": "Diagnostic Supply Chain",
-      "initiators": ["1MG2795"],
-      "hrbp": ["1MG_HRBP_5"],
+      "initiators": [
+        "1MG2795"
+      ],
+      "hrbp": [
+        "1MG_HRBP_5"
+      ],
       "approver": "1MG4290",
       "input_type": "amount"
     },
     {
       "name": "WEEKLY INCENTIVE 2",
       "employee_home": "Diagnostic Supply Chain",
-      "initiators": ["1MG2795"],
-      "hrbp": ["1MG_HRBP_5"],
+      "initiators": [
+        "1MG2795"
+      ],
+      "hrbp": [
+        "1MG_HRBP_5"
+      ],
       "approver": "1MG4290",
       "input_type": "amount"
     },
     {
       "name": "WEEKLY INCENTIVE 3",
       "employee_home": "Diagnostic Supply Chain",
-      "initiators": ["1MG2795"],
-      "hrbp": ["1MG_HRBP_5"],
+      "initiators": [
+        "1MG2795"
+      ],
+      "hrbp": [
+        "1MG_HRBP_5"
+      ],
       "approver": "1MG4290",
       "input_type": "amount"
     },
     {
       "name": "WEEKLY INCENTIVE 4",
       "employee_home": "Diagnostic Supply Chain",
-      "initiators": ["1MG2795"],
-      "hrbp": ["1MG_HRBP_5"],
+      "initiators": [
+        "1MG2795"
+      ],
+      "hrbp": [
+        "1MG_HRBP_5"
+      ],
       "approver": "1MG4290",
       "input_type": "amount"
     },
     {
       "name": "WEEKLY INCENTIVE 5",
       "employee_home": "Diagnostic Supply Chain",
-      "initiators": ["1MG2795"],
-      "hrbp": ["1MG_HRBP_5"],
+      "initiators": [
+        "1MG2795"
+      ],
+      "hrbp": [
+        "1MG_HRBP_5"
+      ],
       "approver": "1MG4290",
       "input_type": "amount"
+    },
+    {
+      "name": "LONG LEAVES",
+      "employee_home": "Employee Home Wise",
+      "initiators": [],
+      "hrbp": "NA",
+      "approver": "NA",
+      "input_type": "days"
     }
   ]
 }

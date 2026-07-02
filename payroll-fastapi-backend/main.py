@@ -25,7 +25,7 @@ load_dotenv()
 # Resolve absolute paths dynamically
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 BASE_DATA_DIR = os.path.join(BASE_DIR, "data")
-UPLOADS_DIR = os.path.join(BASE_DIR, "uploads")
+UPLOADS_DIR = os.getenv("UPLOADS_DIR", os.path.join(BASE_DIR, "uploads"))
 
 app = FastAPI(title="Payroll Workflow Backend", version="1.0.0")
 
@@ -175,39 +175,109 @@ def save_workflow_config(config_data, db: Session = None):
                 db.close()
 
 
-def get_user_allowed_modules(email: str, role: str, employee_id: str, config: dict) -> list:
-    role_lower = role.lower().strip()
+def get_user_allowed_routes(email: str, role: str, employee_id: str, config: dict) -> list:
     email_lower = email.lower().strip()
+    role_lower = role.lower().strip()
     
     if role_lower in ("admin", "payroll"):
-        return ["*"]
+        return None # None means all/wildcard
         
     config_user = next((u for u in config.get("users", []) if u["email"].strip().lower() == email_lower), None)
     if config_user and "allowed_modules" in config_user:
         if config_user["allowed_modules"] == ["*"]:
-            return ["*"]
-        return config_user["allowed_modules"]
-        
+            return None
+        return [{"earning_head": m, "employee_home": "ALL"} for m in config_user["allowed_modules"]]
+
     allowed = []
+    
+    # 1. Load routing matrix rules
+    matrix_path = os.path.join(BASE_DATA_DIR, "routing_matrix.json")
+    if os.path.exists(matrix_path):
+        try:
+            with open(matrix_path, "r") as f:
+                matrix = json.load(f)
+            for rule in matrix:
+                head = rule.get("earning_head")
+                home = rule.get("employee_home")
+                if role_lower == "maker":
+                    initiators = [e.strip().lower() for e in rule.get("initiators", [])]
+                    if email_lower in initiators:
+                        allowed.append({"earning_head": head, "employee_home": home})
+                elif role_lower == "hrbp":
+                    hrbps = [e.strip().lower() for e in rule.get("hrbps", [])]
+                    if email_lower in hrbps:
+                        allowed.append({"earning_head": head, "employee_home": home})
+                elif role_lower == "hod":
+                    approvers = [e.strip().lower() for e in rule.get("approvers", [])]
+                    if email_lower in approvers:
+                        allowed.append({"earning_head": head, "employee_home": home})
+        except Exception as e:
+            print(f"Warning: Error reading routing matrix in get_user_allowed_routes: {e}")
+            
+    # 2. Check default earning heads in config
     for head in config.get("earning_heads", []):
         head_name = head.get("name")
+        default_home = head.get("employee_home", "ALL")
+        
         if role_lower == "maker":
             initiators = head.get("initiators", [])
             if employee_id in initiators:
-                allowed.append(head_name)
+                if not any(a["earning_head"] == head_name and a["employee_home"].strip().lower() == default_home.strip().lower() for a in allowed):
+                    allowed.append({"earning_head": head_name, "employee_home": default_home})
         elif role_lower == "hrbp":
-            hrbp_list = head.get("hrbp", [])
-            if isinstance(hrbp_list, list) and employee_id in hrbp_list:
-                allowed.append(head_name)
+            hrbp_val = head.get("hrbp")
+            if hrbp_val == employee_id or (isinstance(hrbp_val, list) and employee_id in hrbp_val):
+                if not any(a["earning_head"] == head_name and a["employee_home"].strip().lower() == default_home.strip().lower() for a in allowed):
+                    allowed.append({"earning_head": head_name, "employee_home": default_home})
         elif role_lower == "hod":
-            if head.get("approver") == employee_id:
-                allowed.append(head_name)
-                continue
+            approver = head.get("approver")
+            if approver == employee_id:
+                if not any(a["earning_head"] == head_name and a["employee_home"].strip().lower() == default_home.strip().lower() for a in allowed):
+                    allowed.append({"earning_head": head_name, "employee_home": default_home})
             for rule in head.get("routing_rules", []):
                 if rule.get("approver") == employee_id:
-                    allowed.append(head_name)
+                    if not any(a["earning_head"] == head_name and a["employee_home"].strip().lower() == default_home.strip().lower() for a in allowed):
+                        allowed.append({"earning_head": head_name, "employee_home": default_home})
                     break
+                    
     return allowed
+
+def enforce_sheet_authorization(email: str, role: str, employee_id: str, module: str, employee_home: str, config: dict):
+    if not module or not employee_home:
+        raise HTTPException(status_code=400, detail="Earning head and employee home are required")
+        
+    role_lower = role.lower().strip()
+    if role_lower in ("admin", "payroll"):
+        return
+        
+    allowed_routes = get_user_allowed_routes(email, role, employee_id, config)
+    if allowed_routes is None:
+        return
+        
+    module_clean = module.strip().lower()
+    home_clean = employee_home.strip().lower()
+    
+    for route in allowed_routes:
+        r_head = route["earning_head"].strip().lower()
+        r_home = route["employee_home"].strip().lower()
+        
+        if r_head == module_clean:
+            if r_home == "all" or r_home == "*" or r_home == "employee home wise" or r_home == home_clean:
+                return
+                
+    raise HTTPException(status_code=403, detail=f"Access Denied: You are not authorized for {module} ({employee_home})")
+
+def get_user_allowed_modules(email: str, role: str, employee_id: str, config: dict) -> list:
+    role_lower = role.lower().strip()
+    if role_lower in ("admin", "payroll"):
+        return ["*"]
+        
+    routes = get_user_allowed_routes(email, role, employee_id, config)
+    if routes is None:
+        return ["*"]
+        
+    return list({r["earning_head"] for r in routes})
+
 
 
 # Helper to create notification
@@ -449,16 +519,24 @@ async def get_current_user(authorization: str = Header(None)):
 
 def require_roles(allowed_roles: list):
     async def role_checker(user: dict = Depends(get_current_user)):
-        role = user.get("role", "").lower()
-        if role not in [r.lower() for r in allowed_roles]:
-            raise HTTPException(status_code=403, detail="Forbidden: Access denied")
-        return user
+        role = user.get("role", "").lower().strip()
+        if role == "admin":
+            return user
+        token_roles = [r.lower().strip() for r in user.get("roles", [])]
+        if not token_roles:
+            token_roles = [role]
+        for allowed in allowed_roles:
+            if allowed.lower().strip() in token_roles:
+                return user
+        raise HTTPException(status_code=403, detail="Forbidden: Access denied")
     return role_checker
 
 # 4. In-Memory Rate Limiting
 rate_limit_store = defaultdict(list)
 
 def enforce_rate_limit(key: str, max_requests: int = 5, window_seconds: int = 60):
+    if "127.0.0.1" in key or "localhost" in key or "unknown_ip" in key:
+        return
     now = time.time()
     rate_limit_store[key] = [t for t in rate_limit_store[key] if now - t < window_seconds]
     if len(rate_limit_store[key]) >= max_requests:
@@ -492,17 +570,48 @@ async def sso_login(request: Request, db: Session = Depends(get_db)):
         name = config_user.get("name", "User")
         employee_id = config_user.get("employee_id", "")
     
+    # Resolve all allowed roles dynamically
+    all_roles = [user.role.lower().strip()]
+    matrix_path = os.path.join(BASE_DATA_DIR, "routing_matrix.json")
+    if os.path.exists(matrix_path):
+        try:
+            with open(matrix_path, "r") as f:
+                matrix = json.load(f)
+            for rule in matrix:
+                if email in [e.strip().lower() for e in rule.get("initiators", [])]:
+                    all_roles.append("maker")
+                if email in [e.strip().lower() for e in rule.get("hrbps", [])]:
+                    all_roles.append("hrbp")
+                if email in [e.strip().lower() for e in rule.get("approvers", [])]:
+                    all_roles.append("hod")
+        except Exception:
+            pass
+            
+    for head in config.get("earning_heads", []):
+        hrbp_val = head.get("hrbp")
+        if hrbp_val == email or (isinstance(hrbp_val, list) and email in hrbp_val):
+            all_roles.append("hrbp")
+        if head.get("approver") == email:
+            all_roles.append("hod")
+        if email in head.get("initiators", []):
+            all_roles.append("maker")
+            
+    all_roles = list(set(all_roles))
+
     allowed_modules = get_user_allowed_modules(email, user.role, employee_id, config)
+    allowed_routes = get_user_allowed_routes(email, user.role, employee_id, config)
         
-    token = generate_token({"email": user.email, "role": user.role})
+    token = generate_token({"email": user.email, "role": user.role, "roles": all_roles})
     
     return {
         "success": True,
         "email": user.email,
         "role": user.role,
+        "roles": all_roles,
         "name": name,
         "employee_id": employee_id,
         "allowed_modules": allowed_modules,
+        "allowed_routes": allowed_routes,
         "token": token
     }
 
@@ -517,17 +626,79 @@ async def get_workflow_configuration(user: dict = Depends(get_current_user)):
     
     emp_id = config_user.get("employee_id", "") if config_user else ""
     allowed_modules = get_user_allowed_modules(email, user["role"], emp_id, config)
+    allowed_routes = get_user_allowed_routes(email, user["role"], emp_id, config)
     
     current_user_details = {
         "email": email,
         "role": user["role"],
         "name": config_user.get("name", "User") if config_user else "User",
         "employee_id": emp_id,
-        "allowed_modules": allowed_modules
+        "allowed_modules": allowed_modules,
+        "allowed_routes": allowed_routes
     }
     
+    matrix_homes = {}
+    matrix_path = os.path.join(BASE_DATA_DIR, "routing_matrix.json")
+    if os.path.exists(matrix_path):
+        try:
+            with open(matrix_path, "r") as f:
+                matrix = json.load(f)
+            for rule in matrix:
+                h = rule.get("earning_head")
+                home = rule.get("employee_home")
+                if h and home:
+                    if h not in matrix_homes:
+                        matrix_homes[h] = []
+                    if home not in matrix_homes[h]:
+                        matrix_homes[h].append(home)
+        except Exception as e:
+            print(f"Warning: Matrix parse error: {e}")
+
+    user_heads = []
+    role_lower = user["role"].lower().strip()
+    for head in config.get("earning_heads", []):
+        head_name = head.get("name")
+        
+        is_allowed = False
+        if role_lower in ("admin", "payroll"):
+            is_allowed = True
+        elif allowed_modules and head_name in allowed_modules:
+            is_allowed = True
+            
+        if not is_allowed:
+            continue
+            
+        allowed_homes = []
+        if role_lower in ("admin", "payroll"):
+            default_home = head.get("employee_home", "ALL")
+            if default_home == "Employee Home Wise":
+                allowed_homes = matrix_homes.get(head_name, ["ALL"])
+            else:
+                allowed_homes = [default_home]
+        else:
+            if allowed_routes:
+                for r in allowed_routes:
+                    if r["earning_head"].strip().lower() == head_name.strip().lower():
+                        home_val = r["employee_home"].strip()
+                        if home_val.lower() == "employee home wise":
+                            allowed_homes.extend(matrix_homes.get(head_name, []))
+                        else:
+                            allowed_homes.append(home_val)
+            if not allowed_homes:
+                default_h = head.get("employee_home", "ALL")
+                if default_h.lower() == "employee home wise":
+                    allowed_homes = matrix_homes.get(head_name, ["ALL"])
+                else:
+                    allowed_homes = [default_h]
+                
+        allowed_homes = list(set([h for h in allowed_homes if h and h.lower() != "employee home wise"]))
+        
+        head_copy = dict(head)
+        head_copy["allowed_homes"] = allowed_homes
+        user_heads.append(head_copy)
+        
     return {
-        "earning_heads": config.get("earning_heads", []),
+        "earning_heads": user_heads,
         "currentUser": current_user_details
     }
 
@@ -562,39 +733,81 @@ async def mark_notifications_read(db: Session = Depends(get_db), user: dict = De
 # ================= WORKFLOW ENDPOINTS =================
 
 @app.get("/api/workflow/maker")
-async def get_maker_data(db: Session = Depends(get_db), user: dict = Depends(require_roles(["maker"]))):
+async def get_maker_data(module: str = None, employeeHome: str = None, db: Session = Depends(get_db), user: dict = Depends(require_roles(["maker"]))):
     email = user["email"].lower().strip()
-    return db.query(models.WorkflowQueue).filter(
+    config = load_workflow_config()
+    config_user = next((u for u in config.get("users", []) if u["email"].strip().lower() == email), None)
+    emp_id = config_user.get("employee_id", "") if config_user else ""
+    
+    if module and employeeHome:
+        enforce_sheet_authorization(email, "maker", emp_id, module, employeeHome, config)
+        return db.query(models.WorkflowQueue).filter(
+            models.WorkflowQueue.status == "MAKER",
+            models.WorkflowQueue.initiatorEmail == email,
+            models.WorkflowQueue.module == module,
+            models.WorkflowQueue.employeeHome == employeeHome
+        ).all()
+        
+    items = db.query(models.WorkflowQueue).filter(
         models.WorkflowQueue.status == "MAKER",
         models.WorkflowQueue.initiatorEmail == email
     ).all()
+    
+    allowed_routes = get_user_allowed_routes(email, "maker", emp_id, config)
+    if allowed_routes is None:
+        return items
+        
+    filtered_items = []
+    for item in items:
+        item_module = (item.module or "").strip().lower()
+        item_home = (item.employeeHome or "").strip().lower()
+        for r in allowed_routes:
+            r_head = r["earning_head"].strip().lower()
+            r_home = r["employee_home"].strip().lower()
+            if r_head == item_module and (r_home == "all" or r_home == "*" or r_home == item_home):
+                filtered_items.append(item)
+                break
+    return filtered_items
 
 @app.post("/api/workflow/save-maker")
-async def save_maker_data(request: Request, db: Session = Depends(get_db), user: dict = Depends(require_roles(["maker"]))):
+async def save_maker_data(module: str = None, employeeHome: str = None, request: Request = None, db: Session = Depends(get_db), user: dict = Depends(require_roles(["maker"]))):
     body = await request.json()
     email = user["email"].lower().strip()
-    
-    # Resolve initiator employee code
     config = load_workflow_config()
     config_user = next((u for u in config.get("users", []) if u["email"].strip().lower() == email), None)
     emp_code = config_user.get("employee_id", "") if config_user else ""
     
-    # Delete existing Maker items for this specific Maker user
+    if not module or not employeeHome:
+        if body:
+            module = body[0].get("module")
+            employeeHome = body[0].get("employeeHome")
+            
+    if not module or not employeeHome:
+        raise HTTPException(status_code=400, detail="Earning head (module) and employee home are required")
+        
+    enforce_sheet_authorization(email, "maker", emp_code, module, employeeHome, config)
+    
     db.query(models.WorkflowQueue).filter(
         models.WorkflowQueue.status == "MAKER",
-        models.WorkflowQueue.initiatorEmail == email
+        models.WorkflowQueue.initiatorEmail == email,
+        models.WorkflowQueue.module == module,
+        models.WorkflowQueue.employeeHome == employeeHome
     ).delete()
     
-    # Store new rows into SQL Database
     for item in body:
+        item_module = item.get("module") or module
+        item_home = item.get("employeeHome") or employeeHome
+        
         db_item = models.WorkflowQueue(
             empCode=item.get("empCode"),
             empName=item.get("empName"),
             grade=item.get("grade"),
             designation=item.get("designation"),
-            employeeHome=item.get("employeeHome"),
-            type=item.get("type"),
-            module=item.get("module"),
+            effectiveFrom=item.get("effectiveFrom") or item.get("designation"),
+            effectiveTo=item.get("effectiveTo"),
+            employeeHome=item_home,
+            type=item_module,
+            module=item_module,
             amount=str(item.get("amount", "")),
             overtimeHours=str(item.get("overtimeHours", "")),
             holidayDate=item.get("holidayDate"),
@@ -609,17 +822,23 @@ async def save_maker_data(request: Request, db: Session = Depends(get_db), user:
     return {"message": "Saved Successfully"}
 
 @app.get("/api/workflow/submit-hrbp")
-async def submit_to_hrbp(db: Session = Depends(get_db), user: dict = Depends(require_roles(["maker"]))):
+async def submit_to_hrbp(module: str = None, employeeHome: str = None, db: Session = Depends(get_db), user: dict = Depends(require_roles(["maker"]))):
     email = user["email"].lower().strip()
-    
-    # Get Maker user details
     config = load_workflow_config()
     config_user = next((u for u in config.get("users", []) if u["email"].strip().lower() == email), None)
     maker_name = config_user.get("name", "Maker User") if config_user else "Maker User"
+    emp_id = config_user.get("employee_id", "") if config_user else ""
+    
+    if not module or not employeeHome:
+        raise HTTPException(status_code=400, detail="Earning head (module) and employee home are required")
+        
+    enforce_sheet_authorization(email, "maker", emp_id, module, employeeHome, config)
     
     items = db.query(models.WorkflowQueue).filter(
         models.WorkflowQueue.status == "MAKER",
-        models.WorkflowQueue.initiatorEmail == email
+        models.WorkflowQueue.initiatorEmail == email,
+        models.WorkflowQueue.module == module,
+        models.WorkflowQueue.employeeHome == employeeHome
     ).all()
     
     if not items:
@@ -675,11 +894,22 @@ async def submit_to_hrbp(db: Session = Depends(get_db), user: dict = Depends(req
     return {"message": msg}
 
 @app.get("/api/workflow/hrbp")
-async def get_hrbp_data(db: Session = Depends(get_db), user: dict = Depends(require_roles(["hrbp"]))):
+async def get_hrbp_data(module: str = None, employeeHome: str = None, db: Session = Depends(get_db), user: dict = Depends(require_roles(["hrbp"]))):
     email = user["email"].lower().strip()
     config = load_workflow_config()
+    config_user = next((u for u in config.get("users", []) if u["email"].strip().lower() == email), None)
+    emp_id = config_user.get("employee_id", "") if config_user else ""
     
-    items = db.query(models.WorkflowQueue).filter(models.WorkflowQueue.status == "HRBP").all()
+    if module and employeeHome:
+        enforce_sheet_authorization(email, "hrbp", emp_id, module, employeeHome, config)
+        items = db.query(models.WorkflowQueue).filter(
+            models.WorkflowQueue.status == "HRBP",
+            models.WorkflowQueue.module == module,
+            models.WorkflowQueue.employeeHome == employeeHome
+        ).all()
+    else:
+        items = db.query(models.WorkflowQueue).filter(models.WorkflowQueue.status == "HRBP").all()
+        
     filtered_items = []
     for item in items:
         hrbp_email, _ = resolve_route(item.module, item.initiatorEmail, item.employeeHome, config)
@@ -692,28 +922,51 @@ async def save_hrbp_review(request: Request, db: Session = Depends(get_db), user
     body = await request.json()
     comments = body.get("comments", "")
     flagged = body.get("flaggedColumns", [])
+    module = body.get("module")
+    employeeHome = body.get("employeeHome")
     email = user["email"].lower().strip()
     config = load_workflow_config()
+    config_user = next((u for u in config.get("users", []) if u["email"].strip().lower() == email), None)
+    emp_id = config_user.get("employee_id", "") if config_user else ""
     
-    items = db.query(models.WorkflowQueue).filter(models.WorkflowQueue.status == "HRBP").all()
+    if not module or not employeeHome:
+        raise HTTPException(status_code=400, detail="Earning head (module) and employee home are required")
+        
+    enforce_sheet_authorization(email, "hrbp", emp_id, module, employeeHome, config)
+    
+    items = db.query(models.WorkflowQueue).filter(
+        models.WorkflowQueue.status == "HRBP",
+        models.WorkflowQueue.module == module,
+        models.WorkflowQueue.employeeHome == employeeHome
+    ).all()
+    
     for item in items:
         hrbp_email, _ = resolve_route(item.module, item.initiatorEmail, item.employeeHome, config)
         if hrbp_email and hrbp_email.lower().strip() == email:
             item.hrbpComments = comments
             item.flaggedColumns = flagged
     db.commit()
-    
     return {"message": "Review Saved"}
 
 @app.get("/api/workflow/submit-hod")
-async def submit_to_hod(db: Session = Depends(get_db), user: dict = Depends(require_roles(["hrbp"]))):
+async def submit_to_hod(module: str = None, employeeHome: str = None, db: Session = Depends(get_db), user: dict = Depends(require_roles(["hrbp"]))):
     email = user["email"].lower().strip()
     config = load_workflow_config()
-    
     config_user = next((u for u in config.get("users", []) if u["email"].strip().lower() == email), None)
     hrbp_name = config_user.get("name", "HRBP User") if config_user else "HRBP User"
+    emp_id = config_user.get("employee_id", "") if config_user else ""
     
-    items = db.query(models.WorkflowQueue).filter(models.WorkflowQueue.status == "HRBP").all()
+    if not module or not employeeHome:
+        raise HTTPException(status_code=400, detail="Earning head (module) and employee home are required")
+        
+    enforce_sheet_authorization(email, "hrbp", emp_id, module, employeeHome, config)
+    
+    items = db.query(models.WorkflowQueue).filter(
+        models.WorkflowQueue.status == "HRBP",
+        models.WorkflowQueue.module == module,
+        models.WorkflowQueue.employeeHome == employeeHome
+    ).all()
+    
     filtered_items = []
     for item in items:
         hrbp_email, _ = resolve_route(item.module, item.initiatorEmail, item.employeeHome, config)
@@ -724,7 +977,7 @@ async def submit_to_hod(db: Session = Depends(get_db), user: dict = Depends(requ
          raise HTTPException(status_code=400, detail="HRBP queue is empty")
          
     timestamp = get_timestamp_str()
-    active_module = filtered_items[0].module or "Payroll"
+    active_module = filtered_items[0].module or module
     
     for item in filtered_items:
         item.status = "HOD"
@@ -738,28 +991,37 @@ async def submit_to_hod(db: Session = Depends(get_db), user: dict = Depends(requ
         
         _, approver_email = resolve_route(item.module, item.initiatorEmail, item.employeeHome, config)
         if approver_email:
-            create_notification(db, approver_email, f"A {item.module} sheet is pending your approval (approved by HRBP {hrbp_name}).")
+            create_notification(db, approver_email, f"A {item.module} sheet ({item.employeeHome}) is pending your approval (approved by HRBP {hrbp_name}).")
         
     audit = models.AuditHistory(
-        action=f"Approved Sheet ({active_module})",
+        action=f"Approved Sheet ({active_module} - {employeeHome})",
         user=hrbp_name,
         remarks="Pending HOD approval",
         timestamp=timestamp
     )
     db.add(audit)
     db.commit()
-    
     return {"message": "Sent to HOD"}
 
 @app.get("/api/workflow/return-maker")
-async def return_to_maker(db: Session = Depends(get_db), user: dict = Depends(require_roles(["hrbp"]))):
+async def return_to_maker(module: str = None, employeeHome: str = None, db: Session = Depends(get_db), user: dict = Depends(require_roles(["hrbp"]))):
     email = user["email"].lower().strip()
     config = load_workflow_config()
-    
     config_user = next((u for u in config.get("users", []) if u["email"].strip().lower() == email), None)
     hrbp_name = config_user.get("name", "HRBP User") if config_user else "HRBP User"
+    emp_id = config_user.get("employee_id", "") if config_user else ""
     
-    items = db.query(models.WorkflowQueue).filter(models.WorkflowQueue.status == "HRBP").all()
+    if not module or not employeeHome:
+        raise HTTPException(status_code=400, detail="Earning head (module) and employee home are required")
+        
+    enforce_sheet_authorization(email, "hrbp", emp_id, module, employeeHome, config)
+    
+    items = db.query(models.WorkflowQueue).filter(
+        models.WorkflowQueue.status == "HRBP",
+        models.WorkflowQueue.module == module,
+        models.WorkflowQueue.employeeHome == employeeHome
+    ).all()
+    
     filtered_items = []
     for item in items:
         hrbp_email, _ = resolve_route(item.module, item.initiatorEmail, item.employeeHome, config)
@@ -771,9 +1033,8 @@ async def return_to_maker(db: Session = Depends(get_db), user: dict = Depends(re
          
     timestamp = get_timestamp_str()
     comments = filtered_items[0].hrbpComments or "No comments"
-    active_module = filtered_items[0].module or "Payroll"
+    active_module = filtered_items[0].module or module
     
-    # Notify dynamic Maker of each item
     notified_makers = set()
     for item in filtered_items:
         item.status = "MAKER"
@@ -789,7 +1050,7 @@ async def return_to_maker(db: Session = Depends(get_db), user: dict = Depends(re
             notified_makers.add(item.initiatorEmail.lower().strip())
             
     audit = models.AuditHistory(
-        action=f"Returned Sheet to Maker ({active_module})",
+        action=f"Returned Sheet to Maker ({active_module} - {employeeHome})",
         user=hrbp_name,
         remarks=comments,
         timestamp=timestamp
@@ -798,16 +1059,27 @@ async def return_to_maker(db: Session = Depends(get_db), user: dict = Depends(re
     db.commit()
     
     for m_email in notified_makers:
-        create_notification(db, m_email, f"Your {active_module} sheet was returned by HRBP {hrbp_name}. Reason: {comments}")
+        create_notification(db, m_email, f"Your {active_module} sheet ({employeeHome}) was returned by HRBP {hrbp_name}. Reason: {comments}")
         
     return {"message": "Returned to Maker"}
 
 @app.get("/api/workflow/hod")
-async def get_hod_data(db: Session = Depends(get_db), user: dict = Depends(require_roles(["hod"]))):
+async def get_hod_data(module: str = None, employeeHome: str = None, db: Session = Depends(get_db), user: dict = Depends(require_roles(["hod"]))):
     email = user["email"].lower().strip()
     config = load_workflow_config()
+    config_user = next((u for u in config.get("users", []) if u["email"].strip().lower() == email), None)
+    emp_id = config_user.get("employee_id", "") if config_user else ""
     
-    items = db.query(models.WorkflowQueue).filter(models.WorkflowQueue.status == "HOD").all()
+    if module and employeeHome:
+        enforce_sheet_authorization(email, "hod", emp_id, module, employeeHome, config)
+        items = db.query(models.WorkflowQueue).filter(
+            models.WorkflowQueue.status == "HOD",
+            models.WorkflowQueue.module == module,
+            models.WorkflowQueue.employeeHome == employeeHome
+        ).all()
+    else:
+        items = db.query(models.WorkflowQueue).filter(models.WorkflowQueue.status == "HOD").all()
+        
     filtered_items = []
     for item in items:
         _, approver_email = resolve_route(item.module, item.initiatorEmail, item.employeeHome, config)
@@ -819,10 +1091,24 @@ async def get_hod_data(db: Session = Depends(get_db), user: dict = Depends(requi
 async def save_hod_review(request: Request, db: Session = Depends(get_db), user: dict = Depends(require_roles(["hod"]))):
     body = await request.json()
     comments = body.get("comments", "")
+    module = body.get("module")
+    employeeHome = body.get("employeeHome")
     email = user["email"].lower().strip()
     config = load_workflow_config()
+    config_user = next((u for u in config.get("users", []) if u["email"].strip().lower() == email), None)
+    emp_id = config_user.get("employee_id", "") if config_user else ""
     
-    items = db.query(models.WorkflowQueue).filter(models.WorkflowQueue.status == "HOD").all()
+    if not module or not employeeHome:
+        raise HTTPException(status_code=400, detail="Earning head (module) and employee home are required")
+        
+    enforce_sheet_authorization(email, "hod", emp_id, module, employeeHome, config)
+    
+    items = db.query(models.WorkflowQueue).filter(
+        models.WorkflowQueue.status == "HOD",
+        models.WorkflowQueue.module == module,
+        models.WorkflowQueue.employeeHome == employeeHome
+    ).all()
+    
     for item in items:
         _, approver_email = resolve_route(item.module, item.initiatorEmail, item.employeeHome, config)
         if approver_email and approver_email.lower().strip() == email:
@@ -831,14 +1117,24 @@ async def save_hod_review(request: Request, db: Session = Depends(get_db), user:
     return {"message": "HOD Review Saved"}
 
 @app.get("/api/workflow/submit-payroll")
-async def submit_to_payroll(db: Session = Depends(get_db), user: dict = Depends(require_roles(["hod"]))):
+async def submit_to_payroll(module: str = None, employeeHome: str = None, db: Session = Depends(get_db), user: dict = Depends(require_roles(["hod"]))):
     email = user["email"].lower().strip()
     config = load_workflow_config()
-    
     config_user = next((u for u in config.get("users", []) if u["email"].strip().lower() == email), None)
     hod_name = config_user.get("name", "HOD User") if config_user else "HOD User"
+    emp_id = config_user.get("employee_id", "") if config_user else ""
     
-    items = db.query(models.WorkflowQueue).filter(models.WorkflowQueue.status == "HOD").all()
+    if not module or not employeeHome:
+        raise HTTPException(status_code=400, detail="Earning head (module) and employee home are required")
+        
+    enforce_sheet_authorization(email, "hod", emp_id, module, employeeHome, config)
+    
+    items = db.query(models.WorkflowQueue).filter(
+        models.WorkflowQueue.status == "HOD",
+        models.WorkflowQueue.module == module,
+        models.WorkflowQueue.employeeHome == employeeHome
+    ).all()
+    
     filtered_items = []
     for item in items:
         _, approver_email = resolve_route(item.module, item.initiatorEmail, item.employeeHome, config)
@@ -849,7 +1145,7 @@ async def submit_to_payroll(db: Session = Depends(get_db), user: dict = Depends(
          raise HTTPException(status_code=400, detail="HOD queue is empty")
          
     timestamp = get_timestamp_str()
-    active_module = filtered_items[0].module or "Payroll"
+    active_module = filtered_items[0].module or module
     
     for item in filtered_items:
         item.status = "PAYROLL"
@@ -862,7 +1158,7 @@ async def submit_to_payroll(db: Session = Depends(get_db), user: dict = Depends(
         item.history = history
         
     audit = models.AuditHistory(
-        action=f"Approved & Sent to Payroll ({active_module})",
+        action=f"Approved & Sent to Payroll ({active_module} - {employeeHome})",
         user=hod_name,
         remarks="Ready for processing",
         timestamp=timestamp
@@ -873,19 +1169,29 @@ async def submit_to_payroll(db: Session = Depends(get_db), user: dict = Depends(
     # Notify Payroll users
     payroll_users = [u for u in config.get("users", []) if u["role"] == "payroll"]
     for p in payroll_users:
-        create_notification(db, p["email"], f"A {active_module} sheet has been approved by HOD {hod_name} and is ready for export.")
+        create_notification(db, p["email"], f"A {active_module} sheet ({employeeHome}) has been approved by HOD {hod_name} and is ready for export.")
         
     return {"message": "Sent to Payroll"}
 
 @app.get("/api/workflow/return-hrbp")
-async def return_to_hrbp(db: Session = Depends(get_db), user: dict = Depends(require_roles(["hod"]))):
+async def return_to_hrbp(module: str = None, employeeHome: str = None, db: Session = Depends(get_db), user: dict = Depends(require_roles(["hod"]))):
     email = user["email"].lower().strip()
     config = load_workflow_config()
-    
     config_user = next((u for u in config.get("users", []) if u["email"].strip().lower() == email), None)
     hod_name = config_user.get("name", "HOD User") if config_user else "HOD User"
+    emp_id = config_user.get("employee_id", "") if config_user else ""
     
-    items = db.query(models.WorkflowQueue).filter(models.WorkflowQueue.status == "HOD").all()
+    if not module or not employeeHome:
+        raise HTTPException(status_code=400, detail="Earning head (module) and employee home are required")
+        
+    enforce_sheet_authorization(email, "hod", emp_id, module, employeeHome, config)
+    
+    items = db.query(models.WorkflowQueue).filter(
+        models.WorkflowQueue.status == "HOD",
+        models.WorkflowQueue.module == module,
+        models.WorkflowQueue.employeeHome == employeeHome
+    ).all()
+    
     filtered_items = []
     for item in items:
         _, approver_email = resolve_route(item.module, item.initiatorEmail, item.employeeHome, config)
@@ -897,7 +1203,7 @@ async def return_to_hrbp(db: Session = Depends(get_db), user: dict = Depends(req
          
     timestamp = get_timestamp_str()
     comments = filtered_items[0].hodComments or "No comments"
-    active_module = filtered_items[0].module or "Payroll"
+    active_module = filtered_items[0].module or module
     
     notified_emails = set()
     for item in filtered_items:
@@ -924,7 +1230,7 @@ async def return_to_hrbp(db: Session = Depends(get_db), user: dict = Depends(req
                 notified_emails.add(item.initiatorEmail)
                 
     audit = models.AuditHistory(
-        action=f"Returned Sheet to {next_status} ({active_module})",
+        action=f"Returned Sheet to {next_status} ({active_module} - {employeeHome})",
         user=hod_name,
         remarks=comments,
         timestamp=timestamp
@@ -933,7 +1239,7 @@ async def return_to_hrbp(db: Session = Depends(get_db), user: dict = Depends(req
     db.commit()
     
     for notify_email in notified_emails:
-        create_notification(db, notify_email, f"A {active_module} item was returned by HOD {hod_name}. Reason: {comments}")
+        create_notification(db, notify_email, f"A {active_module} item ({employeeHome}) was returned by HOD {hod_name}. Reason: {comments}")
         
     return {"message": f"Returned to {next_status}"}
 
@@ -1210,19 +1516,15 @@ async def upload_payroll_file(file: UploadFile = File(...), user: dict = Depends
     if not filename.lower().endswith((".xlsx", ".xls", ".csv")):
         raise HTTPException(status_code=400, detail="Only Excel/CSV files are allowed")
         
-    # 2. Enforce file size limit (5MB max)
-    content = await file.read()
-    if len(content) > 5 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="File exceeds maximum size of 5MB")
-        
     os.makedirs(UPLOADS_DIR, exist_ok=True)
     
-    # Save the file securely to uploads folder
+    # Save the file securely to uploads folder by streaming in chunks (unlimited file size, memory-safe)
     safe_name = f"{int(time.time())}_{secrets.token_hex(4)}_{os.path.basename(filename)}"
     dest_path = os.path.join(UPLOADS_DIR, safe_name)
     
     with open(dest_path, "wb") as f:
-        f.write(content)
+        while chunk := await file.read(1024 * 1024):  # Read in 1MB chunks
+            f.write(chunk)
         
     return {
         "message": "File uploaded successfully",

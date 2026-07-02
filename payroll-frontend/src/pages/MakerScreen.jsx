@@ -26,6 +26,7 @@ const MakerScreen = () => {
   const [rows, setRows] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
   const [activeModule, setActiveModule] = useState("");
+  const [activeEmployeeHome, setActiveEmployeeHome] = useState("");
   const [notifications, setNotifications] = useState([]);
   const navigate = useNavigate();
   const [history, setHistory] = useState([]);
@@ -47,27 +48,41 @@ const MakerScreen = () => {
       return;
     }
     fetchConfig();
-    fetchPayrollData();
     fetchWorkflowHistory();
     fetchNotifications();
   }, []);
+
+  useEffect(() => {
+    if (activeModule && activeEmployeeHome) {
+      fetchPayrollData(activeModule, activeEmployeeHome);
+    }
+  }, [activeModule, activeEmployeeHome]);
+
+  useEffect(() => {
+    if (activeModule && modules.length > 0) {
+      const activeHead = modules.find(m => m.name === activeModule);
+      if (activeHead && activeHead.allowed_homes && activeHead.allowed_homes.length > 0) {
+        if (!activeHead.allowed_homes.includes(activeEmployeeHome)) {
+          setActiveEmployeeHome(activeHead.allowed_homes[0]);
+        }
+      } else {
+        setActiveEmployeeHome("ALL");
+      }
+    }
+  }, [activeModule, modules]);
  
   const fetchConfig = async () => {
     try {
       const response = await API.get("/workflow/config");
       const allHeads = response.data.earning_heads;
-      const currentUser = response.data.currentUser;
-      
-      let filtered = allHeads;
-      if (currentUser && currentUser.allowed_modules && currentUser.allowed_modules.length > 0) {
-        if (!currentUser.allowed_modules.includes("*")) {
-          filtered = allHeads.filter(head => currentUser.allowed_modules.includes(head.name));
+      setModules(allHeads);
+      if (allHeads.length > 0) {
+        setActiveModule(allHeads[0].name);
+        if (allHeads[0].allowed_homes && allHeads[0].allowed_homes.length > 0) {
+          setActiveEmployeeHome(allHeads[0].allowed_homes[0]);
+        } else {
+          setActiveEmployeeHome("ALL");
         }
-      }
-      
-      setModules(filtered);
-      if (filtered.length > 0) {
-        setActiveModule(filtered[0].name);
       }
     } catch (error) {
       console.log("Failed to fetch configuration:", error);
@@ -96,7 +111,16 @@ const MakerScreen = () => {
     sessionStorage.removeItem("user");
     navigate("/");
   };
-
+  
+  const switchRole = (newRole) => {
+    const updatedUser = { ...user, role: newRole };
+    sessionStorage.setItem("user", JSON.stringify(updatedUser));
+    if (newRole === "maker") navigate("/maker");
+    else if (newRole === "hrbp") navigate("/hrbp");
+    else if (newRole === "hod") navigate("/hod");
+    window.location.reload();
+  };
+ 
   const fetchWorkflowHistory = async () => {
     try {
       const response = await API.get("/workflow/history");
@@ -105,34 +129,39 @@ const MakerScreen = () => {
       console.log("Failed to fetch history:", error);
     }
   };
-
-  const fetchPayrollData = async () => {
+ 
+  const fetchPayrollData = async (moduleName, homeName) => {
+    const mod = moduleName || activeModule;
+    const home = homeName || activeEmployeeHome;
+    if (!mod || !home) return;
     try {
-      const response = await API.get("/workflow/maker");
+      const response = await API.get(`/workflow/maker?module=${encodeURIComponent(mod)}&employeeHome=${encodeURIComponent(home)}`);
       setRows(response.data);
     } catch (error) {
       console.log(error);
     }
   };
   const saveSheet = async () => {
+    if (!activeModule || !activeEmployeeHome) return;
     try {
       await API.post(
-        "/workflow/save-maker",
+        `/workflow/save-maker?module=${encodeURIComponent(activeModule)}&employeeHome=${encodeURIComponent(activeEmployeeHome)}`,
         rows
       );
-
+ 
       alert("Saved");
     } catch (error) {
       console.log(error);
     }
   };
-
+ 
   const handleChange = (rowId, field, value) => {
     const updated = rows.map(r => r.id === rowId ? { ...r, [field]: value } : r);
     setRows(updated);
   };
-
+ 
   const addRow = () => {
+    if (!activeModule || !activeEmployeeHome) return;
     const newRow = {
       id: Date.now(),
       sno: rows.length + 1,
@@ -140,7 +169,9 @@ const MakerScreen = () => {
       empName: "",
       grade: "",
       designation: "",
-      employeeHome: "",
+      effectiveFrom: "",
+      effectiveTo: "",
+      employeeHome: activeEmployeeHome,
       type: activeModule,
       module: activeModule,
       amount: "",
@@ -151,17 +182,44 @@ const MakerScreen = () => {
     };
     setRows([...rows, newRow]);
   };
-
+ 
   const deleteRow = (rowId) => {
     setRows(rows.filter(r => r.id !== rowId));
   };
 const downloadTemplate = () => {
-  const link = document.createElement("a");
-  link.href = "/template.csv";
-  link.download = "template.csv";
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  const headers = [
+    "Employee Code",
+    "Employee Name",
+    "Grade",
+    "Designation",
+    "Payment Frequency",
+    "Effective From",
+    "Effective To",
+    "Amount",
+    "Reason",
+    "Remarks",
+    "Payment for the month"
+  ];
+  const sampleData = [
+    {
+      "Employee Code": "EMP001",
+      "Employee Name": "John Doe",
+      "Grade": "M2",
+      "Designation": "Software Engineer",
+      "Payment Frequency": "Monthly",
+      "Effective From": "2026-07-01",
+      "Effective To": "2026-07-31",
+      "Amount": "5000",
+      "Reason": "Project overtime",
+      "Remarks": "Completed extra hours",
+      "Payment for the month": "July 2026"
+    }
+  ];
+  
+  const worksheet = XLSX.utils.json_to_sheet(sampleData, { header: headers });
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Template");
+  XLSX.writeFile(workbook, "payroll_template.xlsx");
 };
   const normalizeDate = (dateVal) => {
     if (!dateVal) return "";
@@ -207,7 +265,8 @@ const downloadTemplate = () => {
         
         // Normalize date fields from template columns so they match calendar format (YYYY-MM-DD)
         const designation = normalizeDate(row.designation || row["Designation"] || row["Effective From"] || "");
-        const employeeHome = normalizeDate(row.employeeHome || row["Employee Home"] || row["Effective To"] || "");
+        const effectiveFrom = designation;
+        const effectiveTo = normalizeDate(row.effectiveTo || row["Effective To"] || row.employeeHome || "");
         
         const amount = row.amount !== undefined ? row.amount.toString() : (row["Amount"] !== undefined ? row["Amount"].toString() : "");
         const overtimeHours = row.overtimeHours || row["Reason"] || "";
@@ -221,7 +280,9 @@ const downloadTemplate = () => {
           empName,
           grade,
           designation,
-          employeeHome,
+          effectiveFrom,
+          effectiveTo,
+          employeeHome: activeEmployeeHome,
           type: activeModule,
           module: activeModule,
           amount,
@@ -231,11 +292,7 @@ const downloadTemplate = () => {
         };
       });
 
-      // Clear any existing draft rows in state for the active module, then append the newly uploaded rows
-      setRows(prevRows => [
-        ...prevRows.filter(r => r.module !== activeModule && r.type !== activeModule),
-        ...formattedRows
-      ]);
+      setRows(formattedRows);
 
       alert("Template Uploaded Successfully");
     };
@@ -486,11 +543,25 @@ const filteredRows =
                   </p>
 
                   <p className="text-[11px] text-[#888] mt-1">
-                    {user?.name}
+                    {user?.role?.toUpperCase()}
                   </p>
                 </div>
 
                 <div className="flex flex-col text-[12px] bg-white">
+                  {user?.roles && user.roles.length > 1 && (
+                    <div className="border-b border-[#F5F1EB] bg-[#FAF8F5] text-left">
+                      <p className="px-4 pt-2 text-[9px] text-gray-400 font-bold uppercase tracking-wider">Switch Role</p>
+                      {user.roles.map(r => r.toLowerCase() !== user.role?.toLowerCase() && (
+                        <div 
+                          key={r}
+                          onClick={() => switchRole(r.toLowerCase())} 
+                          className="px-4 py-2 hover:bg-[#FAF7F2] cursor-pointer text-[#0E2A47] font-medium"
+                        >
+                          {r.toUpperCase()} View
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <div 
                     onClick={() => alert(`Profile Details:\n\nName: ${user?.name || "User"}\nEmail: ${user?.email || "N/A"}\nEmployee ID: ${user?.employee_id || "N/A"}\nRole: ${user?.role || "N/A"}`)}
                     className="px-4 py-3 hover:bg-[#FAF7F2] cursor-pointer border-b border-[#F5F1EB]"
@@ -530,6 +601,23 @@ const filteredRows =
               <p className="text-[12px] text-[#777] mt-1">
                 Payroll workflow processing
               </p>
+              {modules.find(m => m.name === activeModule)?.allowed_homes?.length > 0 && (
+                <div className="flex gap-2 mt-4 flex-wrap">
+                  {modules.find(m => m.name === activeModule).allowed_homes.map(home => (
+                    <button
+                      key={home}
+                      onClick={() => setActiveEmployeeHome(home)}
+                      className={`h-[30px] px-4 rounded-xl text-[11px] font-semibold transition-all ${
+                        activeEmployeeHome === home
+                          ? "bg-black text-white"
+                          : "bg-white border border-[#E7E3DC] text-[#666] hover:bg-[#F26B5B] hover:text-white"
+                      }`}
+                    >
+                      {home}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="flex gap-3">
@@ -779,11 +867,11 @@ const filteredRows =
                       <td className="p-3">
                         <input
                           type="date"
-                          value={row.designation || ""}
+                          value={row.effectiveFrom || row.designation || ""}
                           onChange={(e) =>
                             handleChange(
                               row.id,
-                              "designation",
+                              "effectiveFrom",
                               e.target.value
                             )
                           }
@@ -796,11 +884,11 @@ const filteredRows =
                       <td className="p-3">
                         <input
                           type="date"
-                          value={row.employeeHome || ""}
+                          value={row.effectiveTo || ""}
                           onChange={(e) =>
                             handleChange(
                               row.id,
-                              "employeeHome",
+                              "effectiveTo",
                               e.target.value
                             )
                           }
@@ -902,20 +990,18 @@ const filteredRows =
               <button
                 onClick={async () => {
                   try {
-
                     await API.post(
-  "/workflow/save-maker",
-  rows
-);
+                      `/workflow/save-maker?module=${encodeURIComponent(activeModule)}&employeeHome=${encodeURIComponent(activeEmployeeHome)}`,
+                      rows
+                    );
 
-const response =
-  await API.get(
-    "/workflow/submit-hrbp"
-  );
+                    const response = await API.get(
+                      `/workflow/submit-hrbp?module=${encodeURIComponent(activeModule)}&employeeHome=${encodeURIComponent(activeEmployeeHome)}`
+                    );
 
                     alert(response.data.message);
 
-                    fetchPayrollData();
+                    fetchPayrollData(activeModule, activeEmployeeHome);
                     fetchWorkflowHistory();
 
                   } catch (error) {

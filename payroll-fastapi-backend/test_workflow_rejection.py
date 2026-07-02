@@ -41,13 +41,13 @@ def main():
     }
     
     print("2. Maker saving overtime sheet")
-    res = requests.post(f"{BASE_URL}/workflow/save-maker", json=[sample_row], headers=maker_headers)
+    res = requests.post(f"{BASE_URL}/workflow/save-maker?module=OVERTIME%20HOURS&employeeHome=Office", json=[sample_row], headers=maker_headers)
     if res.status_code != 200:
-        print("❌ FAIL: Maker failed to save sheet:", res.text)
-        sys.exit(1)
+      print("❌ FAIL: Maker failed to save sheet:", res.text)
+      sys.exit(1)
     print("Sheet saved successfully in Maker queue.")
     
-    res = requests.get(f"{BASE_URL}/workflow/maker", headers=maker_headers)
+    res = requests.get(f"{BASE_URL}/workflow/maker?module=OVERTIME%20HOURS&employeeHome=Office", headers=maker_headers)
     maker_queue = res.json()
     if not maker_queue or maker_queue[0]["empCode"] != "EMP999":
         print("FAIL: Maker queue data integrity mismatch:", maker_queue)
@@ -56,14 +56,13 @@ def main():
     
 
     print("3. Maker submitting sheet to HRBP")
-    res = requests.get(f"{BASE_URL}/workflow/submit-hrbp", headers=maker_headers)
+    res = requests.get(f"{BASE_URL}/workflow/submit-hrbp?module=OVERTIME%20HOURS&employeeHome=Office", headers=maker_headers)
     if res.status_code != 200:
         print("FAIL: Submit to HRBP failed:", res.text)
         sys.exit(1)
     print("Submitted to HRBP successfully. (Email notification dispatched to HRBP).")
     
-
-    res = requests.get(f"{BASE_URL}/workflow/maker", headers=maker_headers)
+    res = requests.get(f"{BASE_URL}/workflow/maker?module=OVERTIME%20HOURS&employeeHome=Office", headers=maker_headers)
     if len(res.json()) != 0:
         print("FAIL: Maker queue not cleared after submission.")
         sys.exit(1)
@@ -74,7 +73,7 @@ def main():
     hrbp_headers = {"Authorization": f"Bearer {hrbp_token}"}
     print("HRBP authenticated successfully.")
     
-    res = requests.get(f"{BASE_URL}/workflow/hrbp", headers=hrbp_headers)
+    res = requests.get(f"{BASE_URL}/workflow/hrbp?module=OVERTIME%20HOURS&employeeHome=Office", headers=hrbp_headers)
     hrbp_queue = res.json()
     if not hrbp_queue or hrbp_queue[0]["empCode"] != "EMP999":
         print("FAIL: HRBP queue is empty or data mismatch:", hrbp_queue)
@@ -84,7 +83,9 @@ def main():
     print("5. HRBP entering review comments and flagging columns...")
     review_payload = {
         "comments": "HRBP Review: Verified. Amount looks correct.",
-        "flaggedColumns": ["amount"]
+        "flaggedColumns": ["amount"],
+        "module": "OVERTIME HOURS",
+        "employeeHome": "Office"
     }
     res = requests.post(f"{BASE_URL}/workflow/save-hrbp-review", json=review_payload, headers=hrbp_headers)
     if res.status_code != 200:
@@ -93,7 +94,7 @@ def main():
     print("HRBP review comments saved.")
 
     print("6. HRBP submitting sheet to HOD...")
-    res = requests.get(f"{BASE_URL}/workflow/submit-hod", headers=hrbp_headers)
+    res = requests.get(f"{BASE_URL}/workflow/submit-hod?module=OVERTIME%20HOURS&employeeHome=Office", headers=hrbp_headers)
     if res.status_code != 200:
         print("FAIL: Submit to HOD failed:", res.text)
         sys.exit(1)
@@ -104,7 +105,7 @@ def main():
     hod_headers = {"Authorization": f"Bearer {hod_token}"}
     print("HOD authenticated successfully.")
 
-    res = requests.get(f"{BASE_URL}/workflow/hod", headers=hod_headers)
+    res = requests.get(f"{BASE_URL}/workflow/hod?module=OVERTIME%20HOURS&employeeHome=Office", headers=hod_headers)
     hod_queue = res.json()
     if not hod_queue or hod_queue[0]["empCode"] != "EMP999":
         print("FAIL: HOD queue is empty or data mismatch:", hod_queue)
@@ -112,15 +113,15 @@ def main():
     print(f"HOD successfully fetched sheet. Incoming HRBP comments: '{hod_queue[0].get('hrbpComments')}'")
     print("8. HOD saving comments and returning sheet to HRBP...")
     hod_comments = "HOD: Return. Overtime hours seem high for this grade."
-    requests.post(f"{BASE_URL}/workflow/save-hod-review", json={"comments": hod_comments}, headers=hod_headers)
-    res = requests.get(f"{BASE_URL}/workflow/return-hrbp", headers=hod_headers)
+    requests.post(f"{BASE_URL}/workflow/save-hod-review", json={"comments": hod_comments, "module": "OVERTIME HOURS", "employeeHome": "Office"}, headers=hod_headers)
+    res = requests.get(f"{BASE_URL}/workflow/return-hrbp?module=OVERTIME%20HOURS&employeeHome=Office", headers=hod_headers)
     if res.status_code != 200:
         print("FAIL: HOD failed to return to HRBP:", res.text)
         sys.exit(1)
     print("Returned to HRBP successfully. (Email notification dispatched to HRBP with comments).")
     
     print("\n9. HRBP fetching returned sheet...")
-    res = requests.get(f"{BASE_URL}/workflow/hrbp", headers=hrbp_headers)
+    res = requests.get(f"{BASE_URL}/workflow/hrbp?module=OVERTIME%20HOURS&employeeHome=Office", headers=hrbp_headers)
     hrbp_queue = res.json()
     if not hrbp_queue:
         print("FAIL: HRBP queue is empty after HOD return.")
@@ -128,7 +129,7 @@ def main():
     print(f"HRBP retrieved sheet. HOD remarks: '{hrbp_queue[0]['history'][-1].get('remarks')}'")
     
     print("10. HRBP returning sheet back to Maker...")
-    res = requests.get(f"{BASE_URL}/workflow/return-maker", headers=hrbp_headers)
+    res = requests.get(f"{BASE_URL}/workflow/return-maker?module=OVERTIME%20HOURS&employeeHome=Office", headers=hrbp_headers)
     if res.status_code != 200:
         print("FAIL: HRBP failed to return to Maker:", res.text)
         sys.exit(1)
@@ -136,7 +137,7 @@ def main():
     
 
     print("\n11. Maker checking final rejected sheet state...")
-    res = requests.get(f"{BASE_URL}/workflow/maker", headers=maker_headers)
+    res = requests.get(f"{BASE_URL}/workflow/maker?module=OVERTIME%20HOURS&employeeHome=Office", headers=maker_headers)
     final_maker_queue = res.json()
     if not final_maker_queue or final_maker_queue[0]["status"] != "MAKER":
         print("FAIL: Sheet status is not MAKER in Maker queue:", final_maker_queue)
